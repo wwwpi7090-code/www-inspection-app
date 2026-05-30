@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+<meta name="theme-color" content="#1a2332"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<title>WWW Property Inspection</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  :root{
+    --navy:#1a2332;--teal:#00b4a6;--teal2:#008f84;--white:#ffffff;
+    --bg:#f4f6f8;--card:#ffffff;--txt:#1a2332;--txt2:#6b7a8d;
+    --danger:#e53935;--warn:#f57c00;--ok:#2e7d32;--border:#e0e4ea;
+    --radius:12px;--shadow:0 2px 12px rgba(0,0,0,0.08);
+  }
+  body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--txt);min-height:100vh}
+  #app{max-width:480px;margin:0 auto;min-height:100vh;position:relative}
+
+  /* SPLASH */
+  .splash{background:var(--navy);min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:40px 20px}
+  .splash-logo{font-size:72px;font-weight:900;color:var(--white);letter-spacing:.04em;line-height:1;animation:fadeUp .9s ease}
+  .splash-bar{width:60px;height:3px;background:var(--teal);margin:16px auto}
+  .splash-sub{font-size:15px;color:var(--teal);letter-spacing:.08em;margin-bottom:6px}
+  .splash-ver{font-size:11px;color:#57636c;margin-top:12px}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes pulse{0%,100%{opacity:.3}50%{opacity:1}}
+  .loading-dots span{display:inline-block;animation:pulse 1.2s ease infinite}
+  .loading-dots span:nth-child(2){animation-delay:.2s}
+  .loading-dots span:nth-child(3){animation-delay:.4s}
+
+  /* HOME */
+  .header{background:var(--navy);padding:28px 20px 32px;text-align:center}
+  .header-logo{font-size:42px;font-weight:900;color:var(--white);letter-spacing:.04em}
+  .header-sub{font-size:13px;color:var(--teal);letter-spacing:.08em;margin-top:4px}
+  .header-nzs{font-size:11px;color:#57636c;margin-top:4px}
+  .page-content{padding:20px}
+
+  /* BUTTONS */
+  .btn-primary{display:block;width:100%;padding:16px;background:var(--teal);color:var(--white);border:none;border-radius:var(--radius);font-size:16px;font-weight:700;cursor:pointer;text-align:center;transition:background .2s}
+  .btn-primary:active{background:var(--teal2)}
+  .btn-secondary{display:block;width:100%;padding:14px;background:var(--white);color:var(--navy);border:2px solid var(--border);border-radius:var(--radius);font-size:14px;font-weight:600;cursor:pointer;text-align:center;transition:all .2s}
+  .btn-secondary:active{border-color:var(--teal);color:var(--teal)}
+  .btn-danger{background:var(--danger);color:var(--white);border:none;border-radius:8px;padding:10px 16px;font-size:13px;cursor:pointer}
+
+  /* CARDS */
+  .card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px;margin-bottom:12px}
+  .card-clickable{cursor:pointer;transition:transform .1s}
+  .card-clickable:active{transform:scale(.98)}
+
+  /* INSPECTION LIST */
+  .insp-addr{font-weight:700;font-size:14px;color:var(--txt)}
+  .insp-meta{font-size:12px;color:var(--txt2);margin-top:2px}
+  .insp-badge{font-family:monospace;font-size:10px;color:var(--txt2);background:var(--bg);padding:2px 8px;border-radius:4px}
+  .insp-defect{font-size:10px;color:var(--danger);font-weight:700}
+  .progress-bar{height:6px;background:var(--bg);border-radius:3px;overflow:hidden;margin-top:8px}
+  .progress-fill{height:100%;border-radius:3px;transition:width .3s}
+
+  /* SECTION LABELS */
+  .section-label{font-family:monospace;font-size:11px;color:var(--txt2);text-transform:uppercase;letter-spacing:.1em;margin:20px 0 10px}
+
+  /* FORM */
+  .form-group{margin-bottom:16px}
+  .form-label{font-size:12px;font-weight:600;color:var(--txt2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;display:block}
+  .form-input{width:100%;padding:12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;color:var(--txt);background:var(--white);outline:none}
+  .form-input:focus{border-color:var(--teal)}
+  .form-select{width:100%;padding:12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;color:var(--txt);background:var(--white);outline:none;appearance:none}
+  .form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+
+  /* NAV TABS */
+  .tab-bar{display:flex;background:var(--white);border-bottom:1px solid var(--border);padding:0 4px}
+  .tab{flex:1;padding:12px 8px;text-align:center;font-size:11px;font-weight:600;color:var(--txt2);border-bottom:3px solid transparent;cursor:pointer;text-transform:uppercase;letter-spacing:.05em}
+  .tab.active{color:var(--teal);border-bottom-color:var(--teal)}
+
+  /* CHECKLIST */
+  .cat-card{background:var(--card);border-radius:var(--radius);margin-bottom:10px;overflow:hidden;box-shadow:var(--shadow)}
+  .cat-header{display:flex;align-items:center;padding:14px 16px;cursor:pointer;gap:10px}
+  .cat-icon{font-size:20px}
+  .cat-label{font-weight:700;font-size:14px;flex:1}
+  .cat-status{font-size:11px;font-weight:700;padding:3px 8px;border-radius:4px}
+  .cat-status.done{background:#e8f5e9;color:var(--ok)}
+  .cat-status.partial{background:#fff3e0;color:var(--warn)}
+  .cat-status.pending{background:#f5f5f5;color:var(--txt2)}
+  .cat-body{border-top:1px solid var(--border)}
+  .check-item{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;gap:10px}
+  .check-item:last-child{border-bottom:none}
+  .check-label{font-size:13px;flex:1;padding-top:2px}
+  .check-btns{display:flex;gap:6px;flex-shrink:0}
+  .cb{width:36px;height:32px;border-radius:6px;border:1.5px solid var(--border);font-size:13px;cursor:pointer;background:var(--white);transition:all .15s;display:flex;align-items:center;justify-content:center}
+  .cb.ok{background:#e8f5e9;border-color:var(--ok);color:var(--ok)}
+  .cb.flag{background:#fde8e8;border-color:var(--danger);color:var(--danger)}
+  .cb.na{background:#f5f5f5;border-color:var(--txt2);color:var(--txt2)}
+  .defect-panel{background:#fff8f8;border-top:1px solid #fde8e8;padding:12px 16px}
+  .defect-title{font-size:11px;font-weight:700;color:var(--danger);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px}
+  .chip-group{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+  .chip{padding:5px 10px;border-radius:20px;font-size:11px;font-weight:600;border:1.5px solid var(--border);cursor:pointer;background:var(--white);color:var(--txt2);transition:all .15s}
+  .chip.sel{background:var(--navy);color:var(--white);border-color:var(--navy)}
+  .notes-input{width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;resize:vertical;min-height:60px;font-family:inherit;outline:none}
+  .notes-input:focus{border-color:var(--teal)}
+
+  /* PHOTO */
+  .photo-section{margin-top:8px}
+  .photo-grid{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+  .photo-thumb{width:60px;height:60px;border-radius:6px;object-fit:cover;border:1.5px solid var(--border)}
+  .photo-add{width:60px;height:60px;border-radius:6px;border:1.5px dashed var(--teal);background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:24px;color:var(--teal);cursor:pointer}
+  .photo-input{display:none}
+
+  /* SUMMARY */
+  .summary-stat{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--border)}
+  .stat-label{font-size:13px;color:var(--txt2)}
+  .stat-val{font-weight:700;font-size:14px}
+  .defect-row{padding:10px 0;border-bottom:1px solid var(--border)}
+  .defect-loc{font-size:12px;color:var(--txt2);margin-bottom:2px}
+  .defect-desc{font-size:13px;font-weight:600}
+  .defect-class{font-size:11px;padding:2px 8px;border-radius:4px;margin-top:4px;display:inline-block}
+  .defect-class.significant{background:#fde8e8;color:var(--danger)}
+  .defect-class.gradual{background:#fff3e0;color:var(--warn)}
+  .defect-class.maintenance{background:#e3f2fd;color:#1565c0}
+  .defect-class.attribute{background:#f3e5f5;color:#6a1b9a}
+
+  /* RISK BADGE */
+  .risk-badge{display:inline-block;padding:6px 16px;border-radius:20px;font-weight:700;font-size:14px;margin-top:8px}
+  .risk-low{background:#e8f5e9;color:var(--ok)}
+  .risk-medium{background:#fff3e0;color:var(--warn)}
+  .risk-high{background:#fde8e8;color:var(--danger)}
+
+  /* BOTTOM NAV */
+  .bottom-nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;background:var(--white);border-top:1px solid var(--border);display:flex;z-index:100;padding-bottom:env(safe-area-inset-bottom)}
+  .nav-btn{flex:1;padding:12px 8px 10px;text-align:center;font-size:10px;font-weight:600;color:var(--txt2);cursor:pointer;border:none;background:none;text-transform:uppercase;letter-spacing:.05em;transition:color .15s}
+  .nav-btn.active{color:var(--teal)}
+  .nav-btn span{display:block;font-size:20px;margin-bottom:2px}
+  .bottom-spacer{height:70px}
+
+  /* MODAL */
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;display:flex;align-items:flex-end;justify-content:center}
+  .modal{background:var(--white);border-radius:20px 20px 0 0;width:100%;max-width:480px;padding:24px 20px 40px;max-height:80vh;overflow-y:auto}
+  .modal-title{font-size:18px;font-weight:700;margin-bottom:16px}
+
+  /* RISK MATRIX */
+  .risk-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)}
+  .risk-factor{font-size:13px}
+  .risk-score{font-weight:700;font-size:16px;color:var(--teal)}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+// ─── CONSTANTS ────────────────────────────────────────────────
+const STORAGE_KEY = "www_insp_v3";
+const DEFECT_TYPES = ["Significant Defect","Gradual Deterioration","Significant Maintenance","Particular Attribute"];
+const ST = {pending:"PENDING",done:"DONE",na:"N/A"};
+const WEATHER = ["Fine","Overcast","Raining","Windy","Hot","Cold"];
+const OCCUPANCY = ["Vacant","Owner Occupied","Tenanted","Under Construction"];
+const CONSTRUCTION = ["Timber Frame","Masonry","Steel Frame","Concrete","Mixed"];
+const ROOFS = ["Corrugated Iron","Longrun Steel","Concrete Tile","Clay Tile","Membrane","Other"];
+const FOUNDATIONS = ["Timber Piles","Concrete Piles","Concrete Slab","Screw Piles","Mixed","Unknown"];
+const CLADDINGS = ["Weatherboard","Brick Veneer","Harditex","Stucco","EIFS","Concrete Block","Mixed","Other"];
+const RISK_FACTORS = ["Wind Zone","Storeys","Eaves Width","Roof/Wall Junctions","Cladding Type","Maintenance"];
+
+const CATS = [
+  {id:"site",label:"Site",icon:"🏞️",items:[
+    {id:"site_orient",l:"Orientation & Exposure"},{id:"site_contour",l:"Contour & Vegetation"},
+    {id:"site_ret",l:"Retaining Walls"},{id:"site_paths",l:"Paths & Steps"},
+    {id:"site_drive",l:"Driveway"},{id:"site_fence",l:"Fencing & Gates"},{id:"site_drain",l:"Surface Water Drainage"}
+  ]},
+  {id:"subfloor",label:"Subfloor",icon:"🔩",items:[
+    {id:"sub_access",l:"Access & Entry"},{id:"sub_found",l:"Foundation & Piles"},
+    {id:"sub_ground",l:"Ground Condition"},{id:"sub_vapour",l:"Vapour Barrier"},
+    {id:"sub_drain",l:"Drainage"},{id:"sub_vent",l:"Ventilation"},{id:"sub_insul",l:"Insulation"},{id:"sub_pest",l:"Pest Evidence"}
+  ]},
+  {id:"exterior",label:"Exterior",icon:"🏠",items:[
+    {id:"ext_clad",l:"Wall Cladding"},{id:"ext_win",l:"Windows & Glazing"},
+    {id:"ext_door",l:"Exterior Doors"},{id:"ext_flash",l:"Flashings & Sealants"},
+    {id:"ext_deck",l:"Decks & Balconies"},{id:"ext_gar",l:"Garage & Carport"},{id:"ext_pen",l:"Penetrations"}
+  ]},
+  {id:"roof",label:"Roof Exterior",icon:"🏗️",items:[
+    {id:"roof_cov",l:"Roof Covering"},{id:"roof_gut",l:"Gutters & Downpipes"},
+    {id:"roof_flash",l:"Flashings"},{id:"roof_ridge",l:"Ridge Cap"},{id:"roof_sky",l:"Skylights"},{id:"roof_chim",l:"Chimney & Flues"}
+  ]},
+  {id:"roofspace",label:"Roof Space",icon:"🔭",items:[
+    {id:"rs_struct",l:"Roof Structure"},{id:"rs_insul",l:"Insulation"},
+    {id:"rs_vent",l:"Ventilation"},{id:"rs_pest",l:"Pest Evidence"},{id:"rs_water",l:"Water Staining/Leaks"}
+  ]},
+  {id:"interior",label:"Interior",icon:"🏡",items:[
+    {id:"int_ceil",l:"Ceilings"},{id:"int_wall",l:"Walls"},{id:"int_floor",l:"Floors"},
+    {id:"int_door",l:"Interior Doors"},{id:"int_stair",l:"Stairs"},{id:"int_win",l:"Windows"}
+  ]},
+  {id:"kitchen",label:"Kitchen",icon:"🍳",items:[
+    {id:"kit_fit",l:"Fittings & Fixtures"},{id:"kit_plumb",l:"Plumbing"},
+    {id:"kit_surf",l:"Surfaces & Benchtops"},{id:"kit_vent",l:"Ventilation"}
+  ]},
+  {id:"bathroom",label:"Bathrooms",icon:"🚿",items:[
+    {id:"bath1",l:"Bathroom 1 - Wet Areas"},{id:"bath1_moist",l:"Bathroom 1 - Moisture"},
+    {id:"bath1_vent",l:"Bathroom 1 - Ventilation"},{id:"bath2",l:"Bathroom 2 - Wet Areas"},
+    {id:"bath2_moist",l:"Bathroom 2 - Moisture"},{id:"toilet",l:"Toilet"}
+  ]},
+  {id:"laundry",label:"Laundry",icon:"🧺",items:[
+    {id:"lau_fit",l:"Fittings & Fixtures"},{id:"lau_drain",l:"Drainage"},{id:"lau_vent",l:"Ventilation"}
+  ]},
+  {id:"garage",label:"Garage",icon:"🚗",items:[
+    {id:"gar_struct",l:"Structure"},{id:"gar_door",l:"Garage Door"},{id:"gar_floor",l:"Floor"},{id:"gar_fire",l:"Fire Separation"}
+  ]},
+  {id:"services",label:"Services",icon:"⚡",items:[
+    {id:"svc_elec",l:"Electrical"},{id:"svc_plumb",l:"Plumbing"},{id:"svc_heat",l:"Heating"},
+    {id:"svc_hw",l:"Hot Water System"},{id:"svc_smoke",l:"Smoke Alarms"}
+  ]},
+  {id:"moisture",label:"Moisture Tests",icon:"💧",items:[
+    {id:"moist_ext",l:"External Readings"},{id:"moist_int",l:"Internal Readings"},
+    {id:"moist_wet",l:"Wet Area Readings"},{id:"moist_sub",l:"Subfloor Readings"}
+  ]}
+];
+
+// ─── STATE ────────────────────────────────────────────────────
+let state = {
+  page: "splash",
+  tab: "checklist",
+  inspections: [],
+  current: null,
+  expandedCat: null,
+  showNewModal: false,
+  showRiskModal: false,
+};
+
+function load(){
+  try{ return JSON.parse(localStorage.getItem(STORAGE_KEY)||"[]"); }catch(e){ return []; }
+}
+function save(list){ localStorage.setItem(STORAGE_KEY, JSON.stringify(list)); }
+
+function mkInspection(){
+  const items = {};
+  CATS.forEach(c=>c.items.forEach(i=>{items[i.id]={status:null,defectType:null,notes:"",photos:[]};}));
+  const now = new Date();
+  const dd = String(now.getDate()).padStart(2,"0");
+  const mm = String(now.getMonth()+1).padStart(2,"0");
+  const yy = String(now.getFullYear()).slice(-2);
+  const seq = String((load().length||0)+1).padStart(2,"0");
+  return {
+    id: Date.now().toString(),
+    fileNo: `wpi ${dd}${mm}${yy}-${seq}`,
+    client:{name:"",email:"",phone:""},
+    insp:{address:"",date:now.toISOString().split("T")[0],inspector:"Philip Oh",weather:"Fine",occupancy:"Vacant"},
+    building:{type:"Timber Frame",cladding:"Weatherboard",roof:"Corrugated Iron",foundation:"Timber Piles",storeys:"1",yearBuilt:"",floorArea:"",siteArea:""},
+    weatherRisk:{windZone:0,storeys:0,eavesWidth:0,roofWallJunctions:0,claddingType:0,maintenance:0},
+    items,
+    createdAt: now.toISOString(),
+  };
+}
+
+function calcPct(ins){
+  const all = Object.values(ins.items);
+  const done = all.filter(i=>i.status!==null).length;
+  return Math.round((done/all.length)*100);
+}
+
+function catStatus(catId, ins){
+  const cat = CATS.find(c=>c.id===catId);
+  if(!cat) return "pending";
+  const statuses = cat.items.map(i=>ins.items[i.id]?.status);
+  if(statuses.every(s=>s!==null)) return "done";
+  if(statuses.some(s=>s!==null)) return "partial";
+  return "pending";
+}
+
+function flagCount(ins){ return Object.values(ins.items).filter(i=>i.status==="flag").length; }
+
+function totalRisk(ins){
+  const v = ins.weatherRisk;
+  return (v.windZone||0)+(v.storeys||0)+(v.eavesWidth||0)+(v.roofWallJunctions||0)+(v.claddingType||0)+(v.maintenance||0);
+}
+
+function riskLevel(score){
+  if(score<=6) return {label:"Low",cls:"risk-low"};
+  if(score<=12) return {label:"Medium",cls:"risk-medium"};
+  return {label:"High",cls:"risk-high"};
+}
+
+function fmtDate(d){ if(!d) return "—"; const dt=new Date(d); return dt.toLocaleDateString("en-NZ",{day:"2-digit",month:"short",year:"numeric"}); }
+
+// ─── RENDER ───────────────────────────────────────────────────
+function render(){
+  const app = document.getElementById("app");
+  app.innerHTML = "";
+
+  if(state.page==="splash"){ renderSplash(app); return; }
+  if(state.page==="home"){ renderHome(app); return; }
+  if(state.page==="detail"){ renderDetail(app); return; }
+}
+
+function renderSplash(root){
+  root.innerHTML = `
+    <div class="splash">
+      <div style="animation:fadeUp .9s ease;text-align:center">
+        <div class="splash-logo">WWW</div>
+        <div class="splash-bar"></div>
+        <div class="splash-sub">Property Inspection Ltd.</div>
+        <div class="splash-ver">NZS 4306:2005 Compliant</div>
+        <div style="margin-top:32px;font-size:13px;color:#57636c" class="loading-dots">
+          <span>●</span><span>●</span><span>●</span>
+        </div>
+      </div>
+    </div>`;
+  setTimeout(()=>{ state.inspections=load(); state.page="home"; render(); }, 1800);
+}
+
+function renderHome(root){
+  const list = state.inspections;
+  root.innerHTML = `
+    <div class="header">
+      <div class="header-logo">WWW</div>
+      <div class="header-sub">Property Inspection</div>
+      <div class="header-nzs">NZS 4306:2005</div>
+    </div>
+    <div class="page-content">
+      <button class="btn-primary" id="btn-new" style="margin-bottom:16px;padding:18px;font-size:16px;border-radius:12px">🏠 &nbsp;New Inspection</button>
+      ${list.length>0?`<div class="section-label">Recent Inspections (${list.length})</div>`:""}
+      ${list.map(ins=>{
+        const pct=calcPct(ins);
+        const fn=flagCount(ins);
+        const fill=pct===100?"#2e7d32":pct>0?"#00b4a6":"#e0e4ea";
+        return `<div class="card card-clickable insp-card" data-id="${ins.id}" style="padding:14px 16px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+            <div>
+              <div class="insp-addr">${ins.insp.address||"No address"}</div>
+              <div class="insp-meta">${ins.client.name||"No client"} · ${fmtDate(ins.insp.date)}</div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+              <span class="insp-badge">${ins.fileNo||"—"}</span>
+              ${fn>0?`<span class="insp-defect">⚑ ${fn} defect${fn>1?"s":""}</span>`:""}
+            </div>
+          </div>
+          <div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background:${fill}"></div></div>
+          <div style="font-size:11px;color:#6b7a8d;margin-top:4px">${pct}% complete</div>
+        </div>`;
+      }).join("")}
+      ${list.length===0?`<div style="text-align:center;padding:60px 20px;color:#6b7a8d">
+        <div style="font-size:48px;margin-bottom:16px">🏠</div>
+        <div style="font-size:14px">No inspections yet.<br>Tap New Inspection to start.</div>
+      </div>`:""}
+    </div>`;
+
+  document.getElementById("btn-new").onclick = ()=>{
+    const ins = mkInspection();
+    state.inspections.unshift(ins);
+    save(state.inspections);
+    state.current = ins;
+    state.page = "detail";
+    state.tab = "details";
+    render();
+  };
+  root.querySelectorAll(".insp-card").forEach(el=>{
+    el.onclick = ()=>{
+      const ins = state.inspections.find(i=>i.id===el.dataset.id);
+      if(ins){ state.current=ins; state.page="detail"; state.tab="checklist"; render(); }
+    };
+  });
+}
+
+function renderDetail(root){
+  const ins = state.current;
+  if(!ins){ state.page="home"; render(); return; }
+  const pct=calcPct(ins);
+  const fn=flagCount(ins);
+  const fill=pct===100?"#2e7d32":pct>0?"#00b4a6":"#e0e4ea";
+
+  let content = "";
+  if(state.tab==="details") content = renderDetailsTab(ins);
+  else if(state.tab==="checklist") content = renderChecklistTab(ins);
+  else if(state.tab==="summary") content = renderSummaryTab(ins);
+
+  root.innerHTML = `
+    <div style="background:var(--navy);padding:16px 20px 20px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+        <button onclick="goHome()" style="background:none;border:none;color:var(--teal);font-size:20px;cursor:pointer">←</button>
+        <div style="flex:1">
+          <div style="font-weight:700;font-size:14px;color:var(--white)">${ins.insp.address||"New Inspection"}</div>
+          <div style="font-size:11px;color:#57636c;margin-top:2px">${ins.fileNo}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:12px;color:var(--teal);font-weight:700">${pct}%</div>
+          ${fn>0?`<div style="font-size:10px;color:#e57373">⚑ ${fn}</div>`:""}
+        </div>
+      </div>
+      <div class="progress-bar" style="height:4px"><div class="progress-fill" style="width:${pct}%;background:${fill}"></div></div>
+    </div>
+    <div class="tab-bar">
+      <div class="tab ${state.tab==="details"?"active":""}" onclick="setTab('details')">Details</div>
+      <div class="tab ${state.tab==="checklist"?"active":""}" onclick="setTab('checklist')">Checklist</div>
+      <div class="tab ${state.tab==="summary"?"active":""}" onclick="setTab('summary')">Summary</div>
+    </div>
+    <div style="padding:16px;padding-bottom:80px">${content}</div>
+    ${renderModal(ins)}`;
+}
+
+function renderDetailsTab(ins){
+  return `
+    <div class="section-label">Client Information</div>
+    <div class="card">
+      <div class="form-group"><label class="form-label">Client Name</label>
+        <input class="form-input" value="${ins.client.name}" oninput="updateField('client.name',this.value)" placeholder="Full name"/></div>
+      <div class="form-group"><label class="form-label">Email</label>
+        <input class="form-input" type="email" value="${ins.client.email}" oninput="updateField('client.email',this.value)" placeholder="email@example.com"/></div>
+      <div class="form-group"><label class="form-label">Phone</label>
+        <input class="form-input" type="tel" value="${ins.client.phone}" oninput="updateField('client.phone',this.value)" placeholder="+64 21 000 0000"/></div>
+    </div>
+    <div class="section-label">Inspection Information</div>
+    <div class="card">
+      <div class="form-group"><label class="form-label">Property Address</label>
+        <input class="form-input" value="${ins.insp.address}" oninput="updateField('insp.address',this.value)" placeholder="123 Example St, Auckland"/></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Date</label>
+          <input class="form-input" type="date" value="${ins.insp.date}" oninput="updateField('insp.date',this.value)"/></div>
+        <div class="form-group"><label class="form-label">Weather</label>
+          <select class="form-select" onchange="updateField('insp.weather',this.value)">
+            ${WEATHER.map(w=>`<option ${ins.insp.weather===w?"selected":""}>${w}</option>`).join("")}
+          </select></div>
+      </div>
+      <div class="form-group"><label class="form-label">Occupancy</label>
+        <select class="form-select" onchange="updateField('insp.occupancy',this.value)">
+          ${OCCUPANCY.map(o=>`<option ${ins.insp.occupancy===o?"selected":""}>${o}</option>`).join("")}
+        </select></div>
+    </div>
+    <div class="section-label">Building Details</div>
+    <div class="card">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Construction</label>
+          <select class="form-select" onchange="updateField('building.type',this.value)">
+            ${CONSTRUCTION.map(c=>`<option ${ins.building.type===c?"selected":""}>${c}</option>`).join("")}
+          </select></div>
+        <div class="form-group"><label class="form-label">Storeys</label>
+          <input class="form-input" value="${ins.building.storeys}" oninput="updateField('building.storeys',this.value)" placeholder="1"/></div>
+      </div>
+      <div class="form-group"><label class="form-label">Cladding</label>
+        <select class="form-select" onchange="updateField('building.cladding',this.value)">
+          ${CLADDINGS.map(c=>`<option ${ins.building.cladding===c?"selected":""}>${c}</option>`).join("")}
+        </select></div>
+      <div class="form-group"><label class="form-label">Roof Type</label>
+        <select class="form-select" onchange="updateField('building.roof',this.value)">
+          ${ROOFS.map(r=>`<option ${ins.building.roof===r?"selected":""}>${r}</option>`).join("")}
+        </select></div>
+      <div class="form-group"><label class="form-label">Foundation</label>
+        <select class="form-select" onchange="updateField('building.foundation',this.value)">
+          ${FOUNDATIONS.map(f=>`<option ${ins.building.foundation===f?"selected":""}>${f}</option>`).join("")}
+        </select></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Year Built</label>
+          <input class="form-input" value="${ins.building.yearBuilt}" oninput="updateField('building.yearBuilt',this.value)" placeholder="1990"/></div>
+        <div class="form-group"><label class="form-label">Floor Area (m²)</label>
+          <input class="form-input" value="${ins.building.floorArea}" oninput="updateField('building.floorArea',this.value)" placeholder="120"/></div>
+      </div>
+    </div>
+    <div class="section-label">Weathertightness Risk</div>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <span style="font-size:13px;color:var(--txt2)">Total Risk Score</span>
+        <span class="risk-badge ${riskLevel(totalRisk(ins)).cls}">${riskLevel(totalRisk(ins)).label} (${totalRisk(ins)})</span>
+      </div>
+      <button class="btn-secondary" onclick="showRiskModal()">Calculate Risk Matrix →</button>
+    </div>
+    <div style="height:16px"></div>
+    <button class="btn-danger" onclick="deleteInspection()" style="width:100%;padding:14px">🗑 Delete Inspection</button>`;
+}
+
+function renderChecklistTab(ins){
+  return CATS.map(cat=>{
+    const st = catStatus(cat.id, ins);
+    const isOpen = state.expandedCat===cat.id;
+    const doneItems = cat.items.filter(i=>ins.items[i.id]?.status!==null).length;
+    return `
+      <div class="cat-card">
+        <div class="cat-header" onclick="toggleCat('${cat.id}')">
+          <span class="cat-icon">${cat.icon}</span>
+          <span class="cat-label">${cat.label}</span>
+          <span style="font-size:11px;color:var(--txt2);margin-right:6px">${doneItems}/${cat.items.length}</span>
+          <span class="cat-status ${st}">${st==="done"?"✓ Done":st==="partial"?"In Progress":"Pending"}</span>
+          <span style="margin-left:6px;color:var(--txt2)">${isOpen?"▲":"▼"}</span>
+        </div>
+        ${isOpen?`<div class="cat-body">
+          ${cat.items.map(item=>{
+            const d = ins.items[item.id]||{};
+            const isFlagged = d.status==="flag";
+            return `
+              <div class="check-item">
+                <span class="check-label">${item.l}</span>
+                <div class="check-btns">
+                  <button class="cb ${d.status==="ok"?"ok":""}" onclick="setStatus('${item.id}','ok')">✓</button>
+                  <button class="cb ${d.status==="flag"?"flag":""}" onclick="setStatus('${item.id}','flag')">⚑</button>
+                  <button class="cb ${d.status==="na"?"na":""}" onclick="setStatus('${item.id}','na')">N/A</button>
+                </div>
+              </div>
+              ${isFlagged?`<div class="defect-panel">
+                <div class="defect-title">⚑ Defect Details</div>
+                <div class="chip-group">
+                  ${DEFECT_TYPES.map(dt=>`<span class="chip ${d.defectType===dt?"sel":""}" onclick="setDefectType('${item.id}','${dt}')">${dt}</span>`).join("")}
+                </div>
+                <textarea class="notes-input" placeholder="Describe the defect, location, recommendation..." oninput="setNotes('${item.id}',this.value)">${d.notes||""}</textarea>
+                <div class="photo-section">
+                  <div style="font-size:11px;font-weight:600;color:var(--txt2);margin-bottom:4px">PHOTOS</div>
+                  <div class="photo-grid">
+                    ${(d.photos||[]).map((p,pi)=>`<img class="photo-thumb" src="${p}" onclick="removePhoto('${item.id}',${pi})"/>`).join("")}
+                    <label class="photo-add" for="photo-${item.id}">+</label>
+                    <input class="photo-input" type="file" id="photo-${item.id}" accept="image/*" capture="environment" onchange="addPhoto('${item.id}',this)"/>
+                  </div>
+                </div>
+              </div>`:""}`;
+          }).join("")}
+        </div>`:""}
+      </div>`;
+  }).join("");
+}
+
+function renderSummaryTab(ins){
+  const pct=calcPct(ins);
+  const fn=flagCount(ins);
+  const risk=riskLevel(totalRisk(ins));
+  const defects = [];
+  CATS.forEach(cat=>cat.items.forEach(item=>{
+    const d=ins.items[item.id];
+    if(d&&d.status==="flag") defects.push({label:item.l,cat:cat.label,...d});
+  }));
+  return `
+    <div class="card" style="margin-bottom:12px">
+      <div style="font-weight:700;font-size:16px;margin-bottom:12px">${ins.insp.address||"No address"}</div>
+      <div class="summary-stat"><span class="stat-label">File Number</span><span class="stat-val">${ins.fileNo}</span></div>
+      <div class="summary-stat"><span class="stat-label">Inspector</span><span class="stat-val">${ins.insp.inspector}</span></div>
+      <div class="summary-stat"><span class="stat-label">Date</span><span class="stat-val">${fmtDate(ins.insp.date)}</span></div>
+      <div class="summary-stat"><span class="stat-label">Completion</span><span class="stat-val" style="color:${pct===100?"var(--ok)":"var(--warn)"}">${pct}%</span></div>
+      <div class="summary-stat"><span class="stat-label">Weathertightness Risk</span><span class="risk-badge ${risk.cls}" style="padding:3px 10px;font-size:12px">${risk.label}</span></div>
+      <div class="summary-stat" style="border:none"><span class="stat-label">Total Defects</span><span class="stat-val" style="color:${fn>0?"var(--danger)":"var(--ok)"}">${fn}</span></div>
+    </div>
+    ${fn>0?`
+    <div class="section-label">Defects Found (${fn})</div>
+    ${defects.map(d=>`
+      <div class="card" style="margin-bottom:8px">
+        <div class="defect-loc">${d.cat}</div>
+        <div class="defect-desc">${d.label}</div>
+        ${d.defectType?`<span class="defect-class ${d.defectType==="Significant Defect"?"significant":d.defectType==="Gradual Deterioration"?"gradual":d.defectType==="Significant Maintenance"?"maintenance":"attribute"}">${d.defectType}</span>`:""}
+        ${d.notes?`<div style="font-size:12px;color:var(--txt2);margin-top:6px">${d.notes}</div>`:""}
+        ${(d.photos||[]).length>0?`<div class="photo-grid" style="margin-top:8px">${d.photos.map(p=>`<img class="photo-thumb" src="${p}"/>`).join("")}</div>`:""}
+      </div>`).join("")}`:""}
+    <div style="height:16px"></div>
+    <button class="btn-primary" onclick="printReport()">🖨 Generate Report</button>`;
+}
+
+function renderModal(ins){
+  if(!state.showRiskModal) return "";
+  const v = ins.weatherRisk;
+  const score = totalRisk(ins);
+  const risk = riskLevel(score);
+  const factors = [
+    {label:"Wind Zone",key:"windZone",opts:["Low (0)","Medium (1)","High (2)","Very High (3)","Extra High (4)"]},
+    {label:"Number of Storeys",key:"storeys",opts:["1 storey (0)","2 storeys (1)","3+ storeys (2)"]},
+    {label:"Eaves Width",key:"eavesWidth",opts:["≥600mm (0)","200-600mm (1)","<200mm (2)"]},
+    {label:"Roof/Wall Junctions",key:"roofWallJunctions",opts:["Simple (0)","Moderate (1)","Complex (2)"]},
+    {label:"Cladding Type",key:"claddingType",opts:["Low risk (0)","Medium (1)","High (2)","Very High (3)"]},
+    {label:"Maintenance",key:"maintenance",opts:["Good (0)","Fair (1)","Poor (2)"]},
+  ];
+  return `<div class="modal-overlay" onclick="closeRiskModal()">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-title">Weathertightness Risk Matrix</div>
+      ${factors.map(f=>`
+        <div class="risk-row">
+          <span class="risk-factor">${f.label}</span>
+          <select class="form-select" style="width:auto;padding:6px 10px;font-size:12px" onchange="setRisk('${f.key}',parseInt(this.value))">
+            ${f.opts.map((o,i)=>`<option value="${i}" ${(v[f.key]||0)===i?"selected":""}>${o}</option>`).join("")}
+          </select>
+        </div>`).join("")}
+      <div style="margin-top:16px;text-align:center">
+        <div style="font-size:13px;color:var(--txt2);margin-bottom:4px">Total Score: ${score}/16</div>
+        <span class="risk-badge ${risk.cls}">${risk.label} Risk</span>
+      </div>
+      <button class="btn-primary" style="margin-top:16px" onclick="closeRiskModal()">Done</button>
+    </div>
+  </div>`;
+}
+
+// ─── ACTIONS ──────────────────────────────────────────────────
+window.goHome = ()=>{ state.page="home"; state.current=null; state.expandedCat=null; render(); };
+window.setTab = (t)=>{ state.tab=t; render(); };
+window.toggleCat = (id)=>{ state.expandedCat = state.expandedCat===id?null:id; render(); };
+window.showRiskModal = ()=>{ state.showRiskModal=true; render(); };
+window.closeRiskModal = ()=>{ state.showRiskModal=false; render(); };
+
+window.updateField = (path, val)=>{
+  const ins = state.current;
+  const parts = path.split(".");
+  let obj = ins;
+  for(let i=0;i<parts.length-1;i++) obj=obj[parts[i]];
+  obj[parts[parts.length-1]] = val;
+  const idx = state.inspections.findIndex(i=>i.id===ins.id);
+  if(idx>=0) state.inspections[idx]=ins;
+  save(state.inspections);
+};
+
+window.setStatus = (itemId, status)=>{
+  const ins = state.current;
+  ins.items[itemId].status = ins.items[itemId].status===status ? null : status;
+  const idx = state.inspections.findIndex(i=>i.id===ins.id);
+  if(idx>=0) state.inspections[idx]=ins;
+  save(state.inspections);
+  render();
+};
+
+window.setDefectType = (itemId, dt)=>{
+  const ins = state.current;
+  ins.items[itemId].defectType = dt;
+  const idx = state.inspections.findIndex(i=>i.id===ins.id);
+  if(idx>=0) state.inspections[idx]=ins;
+  save(state.inspections);
+  render();
+};
+
+window.setNotes = (itemId, notes)=>{
+  const ins = state.current;
+  ins.items[itemId].notes = notes;
+  const idx = state.inspections.findIndex(i=>i.id===ins.id);
+  if(idx>=0) state.inspections[idx]=ins;
+  save(state.inspections);
+};
+
+window.addPhoto = (itemId, input)=>{
+  const file = input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e=>{
+    const ins = state.current;
+    if(!ins.items[itemId].photos) ins.items[itemId].photos=[];
+    ins.items[itemId].photos.push(e.target.result);
+    const idx = state.inspections.findIndex(i=>i.id===ins.id);
+    if(idx>=0) state.inspections[idx]=ins;
+    save(state.inspections);
+    render();
+  };
+  reader.readAsDataURL(file);
+};
+
+window.removePhoto = (itemId, pi)=>{
+  if(!confirm("Remove this photo?")) return;
+  const ins = state.current;
+  ins.items[itemId].photos.splice(pi,1);
+  const idx = state.inspections.findIndex(i=>i.id===ins.id);
+  if(idx>=0) state.inspections[idx]=ins;
+  save(state.inspections);
+  render();
+};
+
+window.setRisk = (key, val)=>{
+  const ins = state.current;
+  ins.weatherRisk[key] = val;
+  const idx = state.inspections.findIndex(i=>i.id===ins.id);
+  if(idx>=0) state.inspections[idx]=ins;
+  save(state.inspections);
+  render();
+};
+
+window.deleteInspection = ()=>{
+  if(!confirm("Delete this inspection? This cannot be undone.")) return;
+  state.inspections = state.inspections.filter(i=>i.id!==state.current.id);
+  save(state.inspections);
+  state.current=null;
+  state.page="home";
+  render();
+};
+
+window.printReport = ()=>{
+  const ins = state.current;
+  const defects = [];
+  CATS.forEach(cat=>cat.items.forEach(item=>{
+    const d=ins.items[item.id];
+    if(d&&d.status==="flag") defects.push({label:item.l,cat:cat.label,...d});
+  }));
+  const risk=riskLevel(totalRisk(ins));
+  const w = window.open("","_blank");
+  w.document.write(`<!DOCTYPE html><html><head><title>WWW Inspection Report - ${ins.fileNo}</title>
+  <style>
+    body{font-family:Arial,sans-serif;max-width:800px;margin:0 auto;padding:40px;color:#1a2332}
+    h1{font-size:28px;color:#1a2332}h2{font-size:16px;color:#00b4a6;margin-top:24px;border-bottom:2px solid #00b4a6;padding-bottom:4px}
+    table{width:100%;border-collapse:collapse;margin-top:8px}td,th{padding:8px;border:1px solid #e0e4ea;font-size:13px}th{background:#f4f6f8}
+    .defect{background:#fff8f8;padding:12px;border-left:4px solid #e53935;margin-bottom:12px;border-radius:4px}
+    .badge{display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700}
+    .low{background:#e8f5e9;color:#2e7d32}.medium{background:#fff3e0;color:#f57c00}.high{background:#fde8e8;color:#e53935}
+    img{max-width:200px;border-radius:4px;margin:4px}
+    @media print{button{display:none}}
+  </style></head><body>
+  <div style="text-align:center;border-bottom:3px solid #00b4a6;padding-bottom:20px;margin-bottom:24px">
+    <h1>WWW</h1><div style="font-size:14px;color:#00b4a6;letter-spacing:.08em">PROPERTY INSPECTION LTD.</div>
+    <div style="font-size:12px;color:#6b7a8d;margin-top:4px">NZS 4306:2005 Residential Property Inspection</div>
+  </div>
+  <h2>General Information</h2>
+  <table><tr><th>File No.</th><td>${ins.fileNo}</td><th>Date</th><td>${fmtDate(ins.insp.date)}</td></tr>
+  <tr><th>Property</th><td colspan="3">${ins.insp.address||"—"}</td></tr>
+  <tr><th>Client</th><td>${ins.client.name||"—"}</td><th>Inspector</th><td>${ins.insp.inspector}</td></tr>
+  <tr><th>Weather</th><td>${ins.insp.weather}</td><th>Occupancy</th><td>${ins.insp.occupancy}</td></tr></table>
+  <h2>Building Details</h2>
+  <table><tr><th>Construction</th><td>${ins.building.type}</td><th>Cladding</th><td>${ins.building.cladding}</td></tr>
+  <tr><th>Roof</th><td>${ins.building.roof}</td><th>Foundation</th><td>${ins.building.foundation}</td></tr>
+  <tr><th>Storeys</th><td>${ins.building.storeys}</td><th>Year Built</th><td>${ins.building.yearBuilt||"—"}</td></tr></table>
+  <h2>Weathertightness Risk</h2>
+  <p>Overall Risk: <span class="badge ${risk.label.toLowerCase()}">${risk.label} (Score: ${totalRisk(ins)})</span></p>
+  <h2>Defects Found (${defects.length})</h2>
+  ${defects.length===0?"<p>No defects recorded.</p>":defects.map(d=>`
+    <div class="defect">
+      <strong>${d.label}</strong> — <em>${d.cat}</em><br/>
+      ${d.defectType?`<span class="badge" style="background:#fde8e8;color:#e53935">${d.defectType}</span><br/>`:""}
+      ${d.notes?`<p style="margin-top:6px;font-size:13px">${d.notes}</p>`:""}
+      ${(d.photos||[]).map(p=>`<img src="${p}"/>`).join("")}
+    </div>`).join("")}
+  <div style="margin-top:40px;border-top:1px solid #e0e4ea;padding-top:20px;font-size:11px;color:#6b7a8d">
+    This report was prepared in accordance with NZS 4306:2005. This is a visual non-invasive inspection only.
+    Inspector: ${ins.insp.inspector} | Date: ${fmtDate(ins.insp.date)} | File: ${ins.fileNo}
+  </div>
+  <button onclick="window.print()" style="margin-top:20px;padding:12px 24px;background:#00b4a6;color:white;border:none;border-radius:8px;font-size:14px;cursor:pointer">Print / Save PDF</button>
+  </body></html>`);
+  w.document.close();
+};
+
+// ─── INIT ─────────────────────────────────────────────────────
+render();
+</script>
+</body>
+</html>
