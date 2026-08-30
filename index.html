@@ -13,19 +13,13 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body, #root { height: 100%; }
     body { overscroll-behavior: none; background: #14181B; font-family: 'Segoe UI', system-ui, sans-serif; }
-    #splash {
-      position: fixed; inset: 0; background: #14181B;
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      z-index: 9999; transition: opacity 0.4s;
-    }
+    #splash { position: fixed; inset: 0; background: #14181B; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; transition: opacity 0.4s; }
     #splash .logo { font-size: 72px; font-weight: 900; color: #fff; letter-spacing: .04em; line-height: 1; }
     #splash .bar { width: 60px; height: 3px; background: #00BCD4; margin: 16px auto; border-radius: 2px; }
     #splash .sub { font-size: 15px; color: #00BCD4; letter-spacing: .08em; margin-bottom: 6px; }
     #splash .ver { font-size: 11px; color: #3D4451; }
     #splash .status { font-size: 12px; color: #57636C; margin-top: 40px; }
-    #err { display:none; position:fixed; bottom:20px; left:16px; right:16px; background:#C62828;
-           color:#fff; padding:14px; border-radius:10px; font-size:13px; z-index:10000;
-           white-space: pre-wrap; word-break: break-all; }
+    #err { display:none; position:fixed; bottom:20px; left:16px; right:16px; background:#C62828; color:#fff; padding:14px; border-radius:10px; font-size:13px; z-index:10000; white-space:pre-wrap; word-break:break-all; }
   </style>
 </head>
 <body>
@@ -39,25 +33,14 @@
   <div id="root"></div>
   <div id="err"></div>
 
-  <!-- React 18 production -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 
   <script>
-    function showErr(msg) {
-      var e = document.getElementById('err');
-      e.textContent = msg;
-      e.style.display = 'block';
-      document.getElementById('status').textContent = 'Error — see below';
-    }
-    window.onerror = function(msg, src, line, col, err) {
-      showErr('JS Error (line ' + line + '): ' + msg);
-      return true;
-    };
-    window.addEventListener('unhandledrejection', function(e) {
-      showErr('Promise Error: ' + (e.reason && e.reason.message ? e.reason.message : String(e.reason)));
-    });
-    document.getElementById('status').textContent = 'Loading app…';
+    function showErr(msg) { var e=document.getElementById('err'); e.textContent=msg; e.style.display='block'; document.getElementById('status').textContent='Error'; }
+    window.onerror = function(msg,src,line) { showErr('Error (L'+line+'): '+msg); return true; };
+    window.addEventListener('unhandledrejection', function(e) { showErr('Promise error: '+(e.reason&&e.reason.message?e.reason.message:String(e.reason))); });
+    document.getElementById('status').textContent = 'Loading…';
   </script>
 
   <script>
@@ -3623,8 +3606,7 @@ function App() {
       }, /*#__PURE__*/React.createElement("button", {
         onClick: function onClick() {
           pendingPhotoItem.current = item.id;
-          // Temporarily add capture for camera
-          fileRef.current.removeAttribute('capture');
+          fileRef.current.setAttribute('capture', 'environment');
           fileRef.current.click();
         },
         style: {
@@ -3642,8 +3624,6 @@ function App() {
       }, "\uD83D\uDCF7 Camera"), /*#__PURE__*/React.createElement("button", {
         onClick: function onClick() {
           pendingPhotoItem.current = item.id;
-          fileRef.current.setAttribute('capture', '');
-          // Remove capture to allow gallery
           fileRef.current.removeAttribute('capture');
           fileRef.current.click();
         },
@@ -4311,24 +4291,16 @@ function App() {
   </script>
 
   <script>
-    document.getElementById('status').textContent = 'Starting React…';
+    document.getElementById('status').textContent = 'Starting…';
     try {
       var container = document.getElementById('root');
       var root = ReactDOM.createRoot(container);
       root.render(React.createElement(App));
-      // Fade out splash after React mounts
       setTimeout(function() {
         var splash = document.getElementById('splash');
-        if (splash) {
-          splash.style.opacity = '0';
-          setTimeout(function() {
-            if (splash.parentNode) splash.parentNode.removeChild(splash);
-          }, 450);
-        }
+        if (splash) { splash.style.opacity='0'; setTimeout(function(){ if(splash.parentNode) splash.parentNode.removeChild(splash); }, 450); }
       }, 400);
-    } catch(e) {
-      showErr('App failed to start:\n' + e.message + '\n' + (e.stack || ''));
-    }
+    } catch(e) { showErr('Start error: '+e.message); }
   </script>
 </body>
 </html>
