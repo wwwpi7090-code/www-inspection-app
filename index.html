@@ -27,14 +27,17 @@
     <div class="logo">WWW</div>
     <div class="bar"></div>
     <div class="sub">Property Inspection Ltd.</div>
-    <div class="ver">NZS 4306:2005 · Phase A v3.1</div>
+    <div class="ver">NZS 4306:2005 · Phase B v3.1</div>
     <div class="status" id="status">Initialising…</div>
   </div>
   <div id="root"></div>
   <div id="err"></div>
 
+  <!-- React 18 -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <!-- docx library for Word generation -->
+  <script src="https://unpkg.com/docx@9.6.1/build/index.js"></script>
 
   <script>
     function showErr(msg) { var e=document.getElementById('err'); e.textContent=msg; e.style.display='block'; document.getElementById('status').textContent='Error'; }
@@ -271,7 +274,7 @@ function migrateFromLocalStorage() {
 } // ─── IMAGE UTILITIES ─────────────────────────────────────────
 function _migrateFromLocalStorage() {
   _migrateFromLocalStorage = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee16() {
-    var LS_KEYS, raw, foundKey, _i, _LS_KEYS, k, v, inspections, migrated, _iterator2, _step2, ins, migratedItems, _i2, _Object$entries, _Object$entries$_i, itemId, itemData, photoRefs, oldPhotos, i, ph, base64, blob, photoId, _t11, _t12, _t13, _t14;
+    var LS_KEYS, raw, foundKey, _i, _LS_KEYS, k, v, inspections, migrated, _iterator2, _step2, ins, migratedItems, _i2, _Object$entries, _Object$entries$_i, itemId, itemData, photoRefs, oldPhotos, i, ph, base64, blob, photoId, _t12, _t13, _t14, _t15;
     return _regenerator().w(function (_context16) {
       while (1) switch (_context16.p = _context16.n) {
         case 0:
@@ -311,7 +314,7 @@ function _migrateFromLocalStorage() {
           break;
         case 6:
           _context16.p = 6;
-          _t11 = _context16.v;
+          _t12 = _context16.v;
           return _context16.a(2, 0);
         case 7:
           if (!(!Array.isArray(inspections) || !inspections.length)) {
@@ -387,7 +390,7 @@ function _migrateFromLocalStorage() {
           break;
         case 17:
           _context16.p = 17;
-          _t12 = _context16.v;
+          _t13 = _context16.v;
         case 18:
           i++;
           _context16.n = 13;
@@ -412,8 +415,8 @@ function _migrateFromLocalStorage() {
           break;
         case 23:
           _context16.p = 23;
-          _t13 = _context16.v;
-          console.warn('Migration error for inspection:', ins.id, _t13);
+          _t14 = _context16.v;
+          console.warn('Migration error for inspection:', ins.id, _t14);
         case 24:
           _context16.n = 10;
           break;
@@ -422,8 +425,8 @@ function _migrateFromLocalStorage() {
           break;
         case 26:
           _context16.p = 26;
-          _t14 = _context16.v;
-          _iterator2.e(_t14);
+          _t15 = _context16.v;
+          _iterator2.e(_t15);
         case 27:
           _context16.p = 27;
           _iterator2.f();
@@ -451,7 +454,7 @@ function _compressImage() {
       scale,
       canvas,
       _args17 = arguments,
-      _t15;
+      _t16;
     return _regenerator().w(function (_context17) {
       while (1) switch (_context17.p = _context17.n) {
         case 0:
@@ -477,8 +480,8 @@ function _compressImage() {
           return _context17.a(2, _context17.v);
         case 4:
           _context17.p = 4;
-          _t15 = _context17.v;
-          console.warn('[Compress] Falling back to original:', _t15);
+          _t16 = _context17.v;
+          console.warn('[Compress] Falling back to original:', _t16);
           return _context17.a(2, file.slice());
       }
     }, _callee17, null, [[1, 4]]);
@@ -516,7 +519,7 @@ function checkStorageQuota() {
 function _checkStorageQuota() {
   _checkStorageQuota = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee18() {
     var _navigator$storage;
-    var _navigator$storage$pe, _navigator$storage2, _yield$navigator$stor, usage, quota, _t16;
+    var _navigator$storage$pe, _navigator$storage2, _yield$navigator$stor, usage, quota, _t17;
     return _regenerator().w(function (_context18) {
       while (1) switch (_context18.p = _context18.n) {
         case 0:
@@ -543,7 +546,7 @@ function _checkStorageQuota() {
           });
         case 4:
           _context18.p = 4;
-          _t16 = _context18.v;
+          _t17 = _context18.v;
           return _context18.a(2, null);
       }
     }, _callee18, null, [[1, 4]]);
@@ -1426,34 +1429,38 @@ function App() {
     _useState16 = _slicedToArray(_useState15, 2),
     aiLoad = _useState16[0],
     setAiLoad = _useState16[1];
-  var _useState17 = useState(null),
+  var _useState17 = useState(false),
     _useState18 = _slicedToArray(_useState17, 2),
-    aiItemLoad = _useState18[0],
-    setAiItemLoad = _useState18[1];
+    wordGenerating = _useState18[0],
+    setWordGenerating = _useState18[1];
   var _useState19 = useState(null),
     _useState20 = _slicedToArray(_useState19, 2),
-    toast = _useState20[0],
-    setToast = _useState20[1];
+    aiItemLoad = _useState20[0],
+    setAiItemLoad = _useState20[1];
   var _useState21 = useState(null),
     _useState22 = _slicedToArray(_useState21, 2),
-    gradeDialog = _useState22[0],
-    setGradeDialog = _useState22[1]; // { itemId, label }
-  var _useState23 = useState(navigator.onLine),
+    toast = _useState22[0],
+    setToast = _useState22[1];
+  var _useState23 = useState(null),
     _useState24 = _slicedToArray(_useState23, 2),
-    isOnline = _useState24[0],
-    setIsOnline = _useState24[1];
-  var _useState25 = useState(false),
+    gradeDialog = _useState24[0],
+    setGradeDialog = _useState24[1]; // { itemId, label }
+  var _useState25 = useState(navigator.onLine),
     _useState26 = _slicedToArray(_useState25, 2),
-    storageWarning = _useState26[0],
-    setStorageWarning = _useState26[1];
+    isOnline = _useState26[0],
+    setIsOnline = _useState26[1];
   var _useState27 = useState(false),
     _useState28 = _slicedToArray(_useState27, 2),
-    swUpdate = _useState28[0],
-    setSwUpdate = _useState28[1];
-  var _useState29 = useState([]),
+    storageWarning = _useState28[0],
+    setStorageWarning = _useState28[1];
+  var _useState29 = useState(false),
     _useState30 = _slicedToArray(_useState29, 2),
-    validationErrors = _useState30[0],
-    setValidationErrors = _useState30[1];
+    swUpdate = _useState30[0],
+    setSwUpdate = _useState30[1];
+  var _useState31 = useState([]),
+    _useState32 = _slicedToArray(_useState31, 2),
+    validationErrors = _useState32[0],
+    setValidationErrors = _useState32[1];
   var fileRef = useRef();
   var pendingPhotoItem = useRef(null);
 
@@ -1545,16 +1552,16 @@ function App() {
     return _saveInspection.apply(this, arguments);
   }
   function _saveInspection() {
-    _saveInspection = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee5(ins) {
+    _saveInspection = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee4(ins) {
       var u, _t2;
-      return _regenerator().w(function (_context5) {
-        while (1) switch (_context5.p = _context5.n) {
+      return _regenerator().w(function (_context4) {
+        while (1) switch (_context4.p = _context4.n) {
           case 0:
             u = _objectSpread(_objectSpread({}, ins), {}, {
               updatedAt: new Date().toISOString()
             });
-            _context5.p = 1;
-            _context5.n = 2;
+            _context4.p = 1;
+            _context4.n = 2;
             return dbPutVerified('inspections', u);
           case 2:
             setList(function (p) {
@@ -1566,16 +1573,16 @@ function App() {
               return n;
             });
             setCur(u);
-            return _context5.a(2, u);
+            return _context4.a(2, u);
           case 3:
-            _context5.p = 3;
-            _t2 = _context5.v;
+            _context4.p = 3;
+            _t2 = _context4.v;
             showToast('⚠️ Save failed — retry', 'error');
             throw _t2;
           case 4:
-            return _context5.a(2);
+            return _context4.a(2);
         }
-      }, _callee5, null, [[1, 3]]);
+      }, _callee4, null, [[1, 3]]);
     }));
     return _saveInspection.apply(this, arguments);
   }
@@ -1611,48 +1618,48 @@ function App() {
     return _delInsp.apply(this, arguments);
   } // ── Photo handling ───────────────────────────────────────────
   function _delInsp() {
-    _delInsp = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee6(id) {
+    _delInsp = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee5(id) {
       var photos, _iterator, _step, ph, _t3;
-      return _regenerator().w(function (_context6) {
-        while (1) switch (_context6.p = _context6.n) {
+      return _regenerator().w(function (_context5) {
+        while (1) switch (_context5.p = _context5.n) {
           case 0:
             if (confirm('Delete this inspection and all its photos?')) {
-              _context6.n = 1;
+              _context5.n = 1;
               break;
             }
-            return _context6.a(2);
+            return _context5.a(2);
           case 1:
-            _context6.n = 2;
+            _context5.n = 2;
             return dbGetByIndex('photos', 'byInspection', id);
           case 2:
-            photos = _context6.v;
+            photos = _context5.v;
             _iterator = _createForOfIteratorHelper(photos);
-            _context6.p = 3;
+            _context5.p = 3;
             _iterator.s();
           case 4:
             if ((_step = _iterator.n()).done) {
-              _context6.n = 6;
+              _context5.n = 6;
               break;
             }
             ph = _step.value;
-            _context6.n = 5;
+            _context5.n = 5;
             return dbDelete('photos', ph.photoId);
           case 5:
-            _context6.n = 4;
+            _context5.n = 4;
             break;
           case 6:
-            _context6.n = 8;
+            _context5.n = 8;
             break;
           case 7:
-            _context6.p = 7;
-            _t3 = _context6.v;
+            _context5.p = 7;
+            _t3 = _context5.v;
             _iterator.e(_t3);
           case 8:
-            _context6.p = 8;
+            _context5.p = 8;
             _iterator.f();
-            return _context6.f(8);
+            return _context5.f(8);
           case 9:
-            _context6.n = 10;
+            _context5.n = 10;
             return dbDelete('inspections', id);
           case 10:
             setList(function (p) {
@@ -1663,9 +1670,9 @@ function App() {
             setCur(null);
             setPage('home');
           case 11:
-            return _context6.a(2);
+            return _context5.a(2);
         }
-      }, _callee6, null, [[3, 7, 8, 9]]);
+      }, _callee5, null, [[3, 7, 8, 9]]);
     }));
     return _delInsp.apply(this, arguments);
   }
@@ -1673,17 +1680,17 @@ function App() {
     return _handleFiles.apply(this, arguments);
   }
   function _handleFiles() {
-    _handleFiles = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee7(files, itemId) {
+    _handleFiles = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee6(files, itemId) {
       var _item$photos;
-      var ins, item, existingCount, i, file, _yield$dbGet, blob, photoId, seq, allPhotos, globalNum, defectRef, filename, photoRecord, saveStatus, savedToDevice, _photoRef, updatedPhotos, latestItem, statusMsg, _t4, _t5, _t6, _t7, _t8, _t9, _t0;
-      return _regenerator().w(function (_context7) {
-        while (1) switch (_context7.p = _context7.n) {
+      var ins, item, existingCount, i, file, _ins$items$itemId, _yield$dbGet, blob, photoId, seq, allPhotos, globalNum, defectRef, photoSuffix, photoLabel, filename, photoRecord, saveStatus, savedToDevice, _photoRef, updatedPhotos, latestItem, statusMsg, _t4, _t5, _t6, _t7, _t8, _t9, _t0;
+      return _regenerator().w(function (_context6) {
+        while (1) switch (_context6.p = _context6.n) {
           case 0:
             if (!(!(files !== null && files !== void 0 && files.length) || !itemId)) {
-              _context7.n = 1;
+              _context6.n = 1;
               break;
             }
-            return _context7.a(2);
+            return _context6.a(2);
           case 1:
             ins = cur;
             item = ins.items[itemId];
@@ -1691,29 +1698,32 @@ function App() {
             i = 0;
           case 2:
             if (!(i < files.length)) {
-              _context7.n = 19;
+              _context6.n = 19;
               break;
             }
             file = files[i];
-            _context7.p = 3;
-            _context7.n = 4;
+            _context6.p = 3;
+            _context6.n = 4;
             return compressImage(file);
           case 4:
-            blob = _context7.v;
+            blob = _context6.v;
             // 2. Build photo record
             photoId = gid();
             seq = existingCount + i + 1; // Global photo number across inspection
             allPhotos = Object.values(ins.items).flatMap(function (d) {
               return d.photos || [];
             });
-            globalNum = allPhotos.length + i + 1;
-            defectRef = itemId;
-            filename = photoFilename(ins.fileNo, defectRef, seq); // 3. Save to IndexedDB
+            globalNum = allPhotos.length + i + 1; // Use D-XX ref if available, else itemId
+            defectRef = ((_ins$items$itemId = ins.items[itemId]) === null || _ins$items$itemId === void 0 ? void 0 : _ins$items$itemId.defectRef) || itemId; // Photo lettered suffix: D-01a, D-01b, D-01c...
+            photoSuffix = String.fromCharCode(97 + i); // a, b, c...
+            photoLabel = "".concat(defectRef).concat(photoSuffix);
+            filename = photoFilename(ins.fileNo, photoLabel, seq); // 3. Save to IndexedDB
             photoRecord = {
               photoId: photoId,
               inspectionId: ins.id,
               defectRef: defectRef,
               seq: seq,
+              photoLabel: photoLabel,
               blob: blob,
               caption: '',
               savedToDevice: false,
@@ -1721,17 +1731,17 @@ function App() {
               createdAt: new Date().toISOString()
             };
             saveStatus = 'ok';
-            _context7.p = 5;
-            _context7.n = 6;
+            _context6.p = 5;
+            _context6.n = 6;
             return dbPutVerified('photos', _objectSpread(_objectSpread({}, photoRecord), {}, {
               saveStatus: 'ok'
             }));
           case 6:
-            _context7.n = 8;
+            _context6.n = 8;
             break;
           case 7:
-            _context7.p = 7;
-            _t4 = _context7.v;
+            _context6.p = 7;
+            _t4 = _context6.v;
             saveStatus = 'fail';
             showToast('🔴 Photo save to app failed — retry', 'error');
           case 8:
@@ -1744,10 +1754,10 @@ function App() {
 
             // 5. Update IndexedDB record with final status
             if (!(saveStatus !== 'pending')) {
-              _context7.n = 9;
+              _context6.n = 9;
               break;
             }
-            _context7.n = 9;
+            _context6.n = 9;
             return dbPut('photos', _objectSpread(_objectSpread({}, photoRecord), {}, {
               saveStatus: saveStatus,
               savedToDevice: savedToDevice
@@ -1757,48 +1767,49 @@ function App() {
             _photoRef = {
               photoId: photoId,
               num: globalNum,
+              photoLabel: photoLabel,
               caption: '',
               saveStatus: saveStatus,
               savedToDevice: savedToDevice
             };
             updatedPhotos = [].concat(_toConsumableArray(item.photos || []), [_photoRef]); // Re-fetch cur in case multiple files are being processed
-            _context7.n = 10;
+            _context6.n = 10;
             return dbGet('inspections', ins.id);
           case 10:
-            _t8 = _yield$dbGet = _context7.v;
+            _t8 = _yield$dbGet = _context6.v;
             _t7 = _t8 === null;
             if (_t7) {
-              _context7.n = 11;
+              _context6.n = 11;
               break;
             }
             _t7 = _yield$dbGet === void 0;
           case 11:
             _t6 = _t7;
             if (_t6) {
-              _context7.n = 12;
+              _context6.n = 12;
               break;
             }
             _t6 = (_yield$dbGet = _yield$dbGet.items) === null || _yield$dbGet === void 0;
           case 12:
             if (!_t6) {
-              _context7.n = 13;
+              _context6.n = 13;
               break;
             }
             _t9 = void 0;
-            _context7.n = 14;
+            _context6.n = 14;
             break;
           case 13:
             _t9 = _yield$dbGet[itemId];
           case 14:
             _t5 = _t9;
             if (_t5) {
-              _context7.n = 15;
+              _context6.n = 15;
               break;
             }
             _t5 = ins.items[itemId];
           case 15:
             latestItem = _t5;
-            _context7.n = 16;
+            _context6.n = 16;
             return saveInspection(_objectSpread(_objectSpread({}, ins), {}, {
               items: _objectSpread(_objectSpread({}, ins.items), {}, _defineProperty({}, itemId, _objectSpread(_objectSpread({}, latestItem), {}, {
                 photos: [].concat(_toConsumableArray(latestItem.photos || []), [_photoRef])
@@ -1807,23 +1818,23 @@ function App() {
           case 16:
             statusMsg = savedToDevice ? '✅ Photo saved + downloaded' : saveStatus === 'ok' ? '💾 Photo saved to app' : '⚠️ Partial save — check';
             showToast(statusMsg, saveStatus === 'fail' ? 'error' : 'ok');
-            _context7.n = 18;
+            _context6.n = 18;
             break;
           case 17:
-            _context7.p = 17;
-            _t0 = _context7.v;
+            _context6.p = 17;
+            _t0 = _context6.v;
             console.error('Photo handling error:', _t0);
             showToast('🔴 Photo error — please retry', 'error');
           case 18:
             i++;
-            _context7.n = 2;
+            _context6.n = 2;
             break;
           case 19:
             fileRef.current.value = '';
           case 20:
-            return _context7.a(2);
+            return _context6.a(2);
         }
-      }, _callee7, null, [[5, 7], [3, 17]]);
+      }, _callee6, null, [[5, 7], [3, 17]]);
     }));
     return _handleFiles.apply(this, arguments);
   }
@@ -1832,25 +1843,25 @@ function App() {
   }
   function deletePhoto(_x12, _x13) {
     return _deletePhoto.apply(this, arguments);
-  } // ── Defect flagging with grade confirmation ──────────────────
+  } // ── Defect auto-numbering ────────────────────────────────────
   function _deletePhoto() {
-    _deletePhoto = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee8(itemId, photoIdx) {
+    _deletePhoto = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee7(itemId, photoIdx) {
       var d, photoRef, photos;
-      return _regenerator().w(function (_context8) {
-        while (1) switch (_context8.n) {
+      return _regenerator().w(function (_context7) {
+        while (1) switch (_context7.n) {
           case 0:
             d = cur.items[itemId];
             photoRef = d.photos[photoIdx];
             if (!(photoRef !== null && photoRef !== void 0 && photoRef.photoId)) {
-              _context8.n = 1;
+              _context7.n = 1;
               break;
             }
-            _context8.n = 1;
+            _context7.n = 1;
             return dbDelete('photos', photoRef.photoId).catch(function () {});
           case 1:
             photos = _toConsumableArray(d.photos);
             photos.splice(photoIdx, 1);
-            _context8.n = 2;
+            _context7.n = 2;
             return updItem(itemId, {
               photos: photos
             });
@@ -1858,45 +1869,61 @@ function App() {
             setPhotoMod(null);
             showToast('Photo deleted');
           case 3:
-            return _context8.a(2);
+            return _context7.a(2);
         }
-      }, _callee8);
+      }, _callee7);
     }));
     return _deletePhoto.apply(this, arguments);
   }
+  function nextDefectRef(inspection) {
+    // Find highest existing D-XX number
+    var max = 0;
+    Object.values(inspection.items).forEach(function (d) {
+      if (d.defectRef) {
+        var n = parseInt(d.defectRef.replace('D-', ''), 10);
+        if (!isNaN(n) && n > max) max = n;
+      }
+    });
+    return "D-".concat(String(max + 1).padStart(2, '0'));
+  }
+
+  // ── Defect flagging with grade confirmation ──────────────────
   function toggleFlag(_x14, _x15) {
     return _toggleFlag.apply(this, arguments);
   }
   function _toggleFlag() {
-    _toggleFlag = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee9(itemId, itemLabel) {
-      var d;
-      return _regenerator().w(function (_context9) {
-        while (1) switch (_context9.n) {
+    _toggleFlag = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee8(itemId, itemLabel) {
+      var d, defectRef;
+      return _regenerator().w(function (_context8) {
+        while (1) switch (_context8.n) {
           case 0:
             d = cur.items[itemId];
             if (!d.flagged) {
-              _context9.n = 2;
+              _context8.n = 2;
               break;
             }
-            _context9.n = 1;
+            _context8.n = 1;
             return updItem(itemId, {
               flagged: false,
               grade: '',
               axes: []
             });
           case 1:
-            _context9.n = 3;
+            _context8.n = 3;
             break;
           case 2:
-            _context9.n = 3;
+            // Flag — assign D-XX number if not already assigned
+            defectRef = d.defectRef || nextDefectRef(cur);
+            _context8.n = 3;
             return updItem(itemId, {
               flagged: true,
-              status: ST.done
+              status: ST.done,
+              defectRef: defectRef
             });
           case 3:
-            return _context9.a(2);
+            return _context8.a(2);
         }
-      }, _callee9);
+      }, _callee8);
     }));
     return _toggleFlag.apply(this, arguments);
   }
@@ -1904,12 +1931,12 @@ function App() {
     return _handleGradeSelect.apply(this, arguments);
   }
   function _handleGradeSelect() {
-    _handleGradeSelect = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee0(itemId, gradeId) {
-      return _regenerator().w(function (_context0) {
-        while (1) switch (_context0.n) {
+    _handleGradeSelect = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee9(itemId, gradeId) {
+      return _regenerator().w(function (_context9) {
+        while (1) switch (_context9.n) {
           case 0:
             if (!(gradeId === 'significant')) {
-              _context0.n = 1;
+              _context9.n = 1;
               break;
             }
             // Confirmation dialog
@@ -1917,17 +1944,17 @@ function App() {
               itemId: itemId,
               grade: gradeId
             });
-            _context0.n = 2;
+            _context9.n = 2;
             break;
           case 1:
-            _context0.n = 2;
+            _context9.n = 2;
             return updItem(itemId, {
               grade: gradeId
             });
           case 2:
-            return _context0.a(2);
+            return _context9.a(2);
         }
-      }, _callee0);
+      }, _callee9);
     }));
     return _handleGradeSelect.apply(this, arguments);
   }
@@ -1935,26 +1962,26 @@ function App() {
     return _confirmSignificant.apply(this, arguments);
   } // ── AI comment ──────────────────────────────────────────────
   function _confirmSignificant() {
-    _confirmSignificant = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee1() {
-      return _regenerator().w(function (_context1) {
-        while (1) switch (_context1.n) {
+    _confirmSignificant = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee0() {
+      return _regenerator().w(function (_context0) {
+        while (1) switch (_context0.n) {
           case 0:
             if (gradeDialog) {
-              _context1.n = 1;
+              _context0.n = 1;
               break;
             }
-            return _context1.a(2);
+            return _context0.a(2);
           case 1:
-            _context1.n = 2;
+            _context0.n = 2;
             return updItem(gradeDialog.itemId, {
               grade: 'significant'
             });
           case 2:
             setGradeDialog(null);
           case 3:
-            return _context1.a(2);
+            return _context0.a(2);
         }
-      }, _callee1);
+      }, _callee0);
     }));
     return _confirmSignificant.apply(this, arguments);
   }
@@ -1962,15 +1989,15 @@ function App() {
     return _aiComment.apply(this, arguments);
   } // ── AI Executive Summary ────────────────────────────────────
   function _aiComment() {
-    _aiComment = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee10(itemId, itemLabel, catLabel) {
+    _aiComment = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee1(itemId, itemLabel, catLabel) {
       var d, _data$content, res, data, text, p, _t1;
-      return _regenerator().w(function (_context10) {
-        while (1) switch (_context10.p = _context10.n) {
+      return _regenerator().w(function (_context1) {
+        while (1) switch (_context1.p = _context1.n) {
           case 0:
             setAiItemLoad(itemId);
             d = cur.items[itemId];
-            _context10.p = 1;
-            _context10.n = 2;
+            _context1.p = 1;
+            _context1.n = 2;
             return fetch('https://api.anthropic.com/v1/messages', {
               method: 'POST',
               headers: {
@@ -1986,14 +2013,14 @@ function App() {
               })
             });
           case 2:
-            res = _context10.v;
-            _context10.n = 3;
+            res = _context1.v;
+            _context1.n = 3;
             return res.json();
           case 3:
-            data = _context10.v;
+            data = _context1.v;
             text = ((_data$content = data.content) === null || _data$content === void 0 || (_data$content = _data$content[0]) === null || _data$content === void 0 || (_data$content = _data$content.text) === null || _data$content === void 0 ? void 0 : _data$content.replace(/```json|```/g, '').trim()) || '{}';
             p = JSON.parse(text);
-            _context10.n = 4;
+            _context1.n = 4;
             return updItem(itemId, {
               description: p.description || '',
               implication: p.implication || '',
@@ -2001,29 +2028,29 @@ function App() {
             });
           case 4:
             showToast('✨ AI fields generated');
-            _context10.n = 6;
+            _context1.n = 6;
             break;
           case 5:
-            _context10.p = 5;
-            _t1 = _context10.v;
+            _context1.p = 5;
+            _t1 = _context1.v;
             showToast('AI error — try again', 'error');
           case 6:
             setAiItemLoad(null);
           case 7:
-            return _context10.a(2);
+            return _context1.a(2);
         }
-      }, _callee10, null, [[1, 5]]);
+      }, _callee1, null, [[1, 5]]);
     }));
     return _aiComment.apply(this, arguments);
   }
   function genExecSummary() {
     return _genExecSummary.apply(this, arguments);
-  } // ── Counts ──────────────────────────────────────────────────
+  } // ── Generate Word Document ──────────────────────────────────
   function _genExecSummary() {
-    _genExecSummary = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee11() {
+    _genExecSummary = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee10() {
       var sig, _data$content2, res, data, _t10;
-      return _regenerator().w(function (_context11) {
-        while (1) switch (_context11.p = _context11.n) {
+      return _regenerator().w(function (_context10) {
+        while (1) switch (_context10.p = _context10.n) {
           case 0:
             setAiLoad(true);
             sig = [];
@@ -2035,8 +2062,8 @@ function App() {
                 }
               });
             });
-            _context11.p = 1;
-            _context11.n = 2;
+            _context10.p = 1;
+            _context10.n = 2;
             return fetch('https://api.anthropic.com/v1/messages', {
               method: 'POST',
               headers: {
@@ -2052,31 +2079,1149 @@ function App() {
               })
             });
           case 2:
-            res = _context11.v;
-            _context11.n = 3;
+            res = _context10.v;
+            _context10.n = 3;
             return res.json();
           case 3:
-            data = _context11.v;
-            _context11.n = 4;
+            data = _context10.v;
+            _context10.n = 4;
             return saveInspection(_objectSpread(_objectSpread({}, cur), {}, {
               execSummary: ((_data$content2 = data.content) === null || _data$content2 === void 0 || (_data$content2 = _data$content2[0]) === null || _data$content2 === void 0 ? void 0 : _data$content2.text) || ''
             }));
           case 4:
             showToast('✨ Executive Summary generated');
-            _context11.n = 6;
+            _context10.n = 6;
             break;
           case 5:
-            _context11.p = 5;
-            _t10 = _context11.v;
+            _context10.p = 5;
+            _t10 = _context10.v;
             showToast('AI error', 'error');
           case 6:
             setAiLoad(false);
           case 7:
-            return _context11.a(2);
+            return _context10.a(2);
         }
-      }, _callee11, null, [[1, 5]]);
+      }, _callee10, null, [[1, 5]]);
     }));
     return _genExecSummary.apply(this, arguments);
+  }
+  function generateWord() {
+    return _generateWord.apply(this, arguments);
+  } // ── Counts ──────────────────────────────────────────────────
+  function _generateWord() {
+    _generateWord = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee11() {
+      var docxLib, Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, AlignmentType, BorderStyle, WidthType, ShadingType, PageBreak, TEAL, LTEAL, BTEAL, RED, LRED, ORANGE, LORANGE, YELLOW, LYELLOW, GRAY, LGRAY, BLACK, gradeColors, bLine, allB, noB, r, rb, h1P, h2P, p, gap, pb, infoTbl, defectBlock, flagged, sigDef, maintDef, detDef, allReadings, ctrlVal, mCls, ch, keyDefs, wtCol, wtBg, filledWTF, doc, blob, url, a, _t11;
+      return _regenerator().w(function (_context11) {
+        while (1) switch (_context11.p = _context11.n) {
+          case 0:
+            docxLib = window.docx;
+            if (docxLib) {
+              _context11.n = 1;
+              break;
+            }
+            showToast('Word library loading — please refresh', 'error');
+            return _context11.a(2);
+          case 1:
+            setWordGenerating(true);
+            showToast('⏳ Generating Word document…');
+            _context11.p = 2;
+            Document = docxLib.Document, Packer = docxLib.Packer, Paragraph = docxLib.Paragraph, TextRun = docxLib.TextRun, Table = docxLib.Table, TableRow = docxLib.TableRow, TableCell = docxLib.TableCell, AlignmentType = docxLib.AlignmentType, BorderStyle = docxLib.BorderStyle, WidthType = docxLib.WidthType, ShadingType = docxLib.ShadingType, PageBreak = docxLib.PageBreak; // ── Color palette ──
+            TEAL = "0A7C6B", LTEAL = "E8F5F3", BTEAL = "00BCD4";
+            RED = "C62828", LRED = "FFEBEE";
+            ORANGE = "EF6C00", LORANGE = "FFF3E0";
+            YELLOW = "F9A825", LYELLOW = "FFFDE7";
+            GRAY = "57636C", LGRAY = "F1F4F8";
+            BLACK = "14181B";
+            gradeColors = {
+              significant: {
+                color: RED,
+                bg: LRED,
+                label: "Significant Defect"
+              },
+              maintenance: {
+                color: ORANGE,
+                bg: LORANGE,
+                label: "Significant Maintenance Required"
+              },
+              deterioration: {
+                color: YELLOW,
+                bg: LYELLOW,
+                label: "Gradual Deterioration"
+              }
+            }; // ── Border helpers ──
+            bLine = function bLine() {
+              var color = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : "CCCCCC";
+              var size = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 4;
+              return {
+                style: BorderStyle.SINGLE,
+                size: size,
+                color: color
+              };
+            };
+            allB = function allB() {
+              var c = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : "CCCCCC";
+              return {
+                top: bLine(c),
+                bottom: bLine(c),
+                left: bLine(c),
+                right: bLine(c)
+              };
+            };
+            noB = function noB() {
+              var n = {
+                style: BorderStyle.NONE,
+                size: 0,
+                color: "FFFFFF"
+              };
+              return {
+                top: n,
+                bottom: n,
+                left: n,
+                right: n
+              };
+            }; // ── Typography ──
+            r = function r(text) {
+              var opts = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+              return new TextRun(_objectSpread({
+                text: String(text || ''),
+                font: "Arial",
+                size: 20,
+                color: BLACK
+              }, opts));
+            };
+            rb = function rb(text) {
+              var opts = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+              return r(text, _objectSpread({
+                bold: true
+              }, opts));
+            };
+            h1P = function h1P(text) {
+              return new Paragraph({
+                spacing: {
+                  before: 320,
+                  after: 160
+                },
+                border: {
+                  bottom: {
+                    style: BorderStyle.SINGLE,
+                    size: 6,
+                    color: TEAL,
+                    space: 4
+                  }
+                },
+                children: [r(text, {
+                  bold: true,
+                  size: 28,
+                  color: TEAL
+                })]
+              });
+            };
+            h2P = function h2P(text) {
+              var color = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : TEAL;
+              return new Paragraph({
+                spacing: {
+                  before: 220,
+                  after: 100
+                },
+                children: [r(text, {
+                  bold: true,
+                  size: 24,
+                  color: color
+                })]
+              });
+            };
+            p = function p(text) {
+              var opts = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+              return new Paragraph({
+                spacing: {
+                  before: 60,
+                  after: 80
+                },
+                children: [r(text, opts)]
+              });
+            };
+            gap = function gap() {
+              var n = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : 120;
+              return new Paragraph({
+                spacing: {
+                  before: n
+                },
+                children: [r('')]
+              });
+            };
+            pb = function pb() {
+              return new Paragraph({
+                children: [new PageBreak()]
+              });
+            }; // ── Info table (2-col label|value) ──
+            infoTbl = function infoTbl(rows) {
+              return new Table({
+                width: {
+                  size: 9026,
+                  type: WidthType.DXA
+                },
+                columnWidths: [2800, 6226],
+                rows: rows.map(function (_ref29, i) {
+                  var _ref30 = _slicedToArray(_ref29, 2),
+                    lbl = _ref30[0],
+                    val = _ref30[1];
+                  return new TableRow({
+                    children: [new TableCell({
+                      width: {
+                        size: 2800,
+                        type: WidthType.DXA
+                      },
+                      borders: allB(),
+                      margins: {
+                        top: 80,
+                        bottom: 80,
+                        left: 120,
+                        right: 120
+                      },
+                      shading: {
+                        fill: i % 2 === 0 ? LTEAL : "FFFFFF",
+                        type: ShadingType.CLEAR
+                      },
+                      children: [new Paragraph({
+                        children: [r(lbl, {
+                          bold: true,
+                          size: 18,
+                          color: TEAL
+                        })]
+                      })]
+                    }), new TableCell({
+                      width: {
+                        size: 6226,
+                        type: WidthType.DXA
+                      },
+                      borders: allB(),
+                      margins: {
+                        top: 80,
+                        bottom: 80,
+                        left: 120,
+                        right: 120
+                      },
+                      shading: {
+                        fill: i % 2 === 0 ? "FFFFFF" : LGRAY,
+                        type: ShadingType.CLEAR
+                      },
+                      children: [new Paragraph({
+                        children: [r(String(val || '—'), {
+                          size: 18
+                        })]
+                      })]
+                    })]
+                  });
+                })
+              });
+            }; // ── Defect block (4-field, coloured left border) ──
+            defectBlock = function defectBlock(d) {
+              var gc = d.gc || {};
+              var axes = (d.axes || []).map(function (ax) {
+                var _AXES$find2;
+                return (_AXES$find2 = AXES.find(function (a) {
+                  return a.id === ax;
+                })) === null || _AXES$find2 === void 0 ? void 0 : _AXES$find2.label;
+              }).filter(Boolean).join(' · ');
+              return new Table({
+                width: {
+                  size: 9026,
+                  type: WidthType.DXA
+                },
+                columnWidths: [2200, 6826],
+                rows: [new TableRow({
+                  children: [new TableCell({
+                    width: {
+                      size: 2200,
+                      type: WidthType.DXA
+                    },
+                    borders: _objectSpread(_objectSpread({}, noB()), {}, {
+                      left: {
+                        style: BorderStyle.SINGLE,
+                        size: 18,
+                        color: gc.color || "999999"
+                      }
+                    }),
+                    shading: {
+                      fill: gc.bg || LGRAY,
+                      type: ShadingType.CLEAR
+                    },
+                    margins: {
+                      top: 120,
+                      bottom: 120,
+                      left: 160,
+                      right: 100
+                    },
+                    children: [new Paragraph({
+                      children: [r(d.defectRef || '—', {
+                        bold: true,
+                        size: 24,
+                        color: gc.color || "999999",
+                        font: "Courier New"
+                      })]
+                    }), new Paragraph({
+                      spacing: {
+                        before: 60
+                      },
+                      children: [r(d.catShort || '—', {
+                        bold: true,
+                        size: 18,
+                        color: BLACK
+                      })]
+                    }), new Paragraph({
+                      children: [r(d.item || '—', {
+                        size: 17,
+                        color: GRAY
+                      })]
+                    }), d.material ? new Paragraph({
+                      spacing: {
+                        before: 40
+                      },
+                      children: [r("Material: ".concat(d.material), {
+                        size: 16,
+                        color: GRAY
+                      })]
+                    }) : new Paragraph({
+                      children: [r('')]
+                    }), axes ? new Paragraph({
+                      spacing: {
+                        before: 40
+                      },
+                      children: [r(axes, {
+                        size: 15,
+                        color: GRAY,
+                        italics: true
+                      })]
+                    }) : new Paragraph({
+                      children: [r('')]
+                    }), d.photoLabels ? new Paragraph({
+                      spacing: {
+                        before: 40
+                      },
+                      children: [r("Photos: ".concat(d.photoLabels), {
+                        size: 15,
+                        color: "0097A7"
+                      })]
+                    }) : new Paragraph({
+                      children: [r('')]
+                    })]
+                  }), new TableCell({
+                    width: {
+                      size: 6826,
+                      type: WidthType.DXA
+                    },
+                    borders: noB(),
+                    margins: {
+                      top: 120,
+                      bottom: 120,
+                      left: 140,
+                      right: 100
+                    },
+                    children: [new Paragraph({
+                      children: [r("LOCATION", {
+                        bold: true,
+                        size: 16,
+                        color: GRAY
+                      })]
+                    }), new Paragraph({
+                      spacing: {
+                        before: 30,
+                        after: 100
+                      },
+                      children: [r(d.location || '—', {
+                        size: 19
+                      })]
+                    }), new Paragraph({
+                      children: [r("DESCRIPTION", {
+                        bold: true,
+                        size: 16,
+                        color: GRAY
+                      })]
+                    }), new Paragraph({
+                      spacing: {
+                        before: 30,
+                        after: 100
+                      },
+                      children: [r(d.description || '—', {
+                        size: 19
+                      })]
+                    }), new Paragraph({
+                      children: [r("IMPLICATION", {
+                        bold: true,
+                        size: 16,
+                        color: GRAY
+                      })]
+                    }), new Paragraph({
+                      spacing: {
+                        before: 30,
+                        after: 100
+                      },
+                      children: [r(d.implication || '—', {
+                        size: 19
+                      })]
+                    }), new Paragraph({
+                      children: [r("RECOMMENDATION", {
+                        bold: true,
+                        size: 16,
+                        color: GRAY
+                      })]
+                    }), new Paragraph({
+                      spacing: {
+                        before: 30
+                      },
+                      children: [r(d.recommendation || '—', {
+                        size: 19
+                      })]
+                    })]
+                  })]
+                })]
+              });
+            }; // ── Build flagged list ──
+            flagged = flaggedItems.map(function (_ref31) {
+              var _catObj$label;
+              var _ref32 = _slicedToArray(_ref31, 2),
+                itemId = _ref32[0],
+                d = _ref32[1];
+              var catObj = CATS.find(function (c) {
+                return c.items.find(function (i) {
+                  return i.id === itemId;
+                });
+              });
+              var itemObj = catObj === null || catObj === void 0 ? void 0 : catObj.items.find(function (i) {
+                return i.id === itemId;
+              });
+              var gc = gradeColors[d.grade] || {};
+              var photoLabels = (d.photos || []).map(function (ph) {
+                return ph.photoLabel || '?';
+              }).join(', ');
+              return _objectSpread(_objectSpread({}, d), {}, {
+                cat: catObj === null || catObj === void 0 ? void 0 : catObj.label,
+                catShort: catObj === null || catObj === void 0 || (_catObj$label = catObj.label) === null || _catObj$label === void 0 ? void 0 : _catObj$label.replace(/^\d+\.\s/, ''),
+                item: itemObj === null || itemObj === void 0 ? void 0 : itemObj.l,
+                itemId: itemId,
+                gc: gc,
+                photoLabels: photoLabels
+              });
+            }).sort(function (a, b) {
+              var na = parseInt((a.defectRef || 'D-99').replace('D-', ''), 10);
+              var nb = parseInt((b.defectRef || 'D-99').replace('D-', ''), 10);
+              return na - nb;
+            });
+            sigDef = flagged.filter(function (d) {
+              return d.grade === 'significant';
+            });
+            maintDef = flagged.filter(function (d) {
+              return d.grade === 'maintenance';
+            });
+            detDef = flagged.filter(function (d) {
+              return d.grade === 'deterioration';
+            }); // ── Moisture helpers ──
+            allReadings = cur.moisture.readings || [];
+            ctrlVal = parseFloat(cur.moisture.controlReading) || 0;
+            mCls = function mCls(v) {
+              var val = parseFloat(v);
+              if (isNaN(val)) return {
+                l: '—',
+                c: GRAY,
+                include: false
+              };
+              if (val < 15) return {
+                l: 'Normal',
+                c: "249689",
+                include: false
+              };
+              if (val < 20) return {
+                l: 'Elevated',
+                c: ORANGE,
+                include: true
+              };
+              if (val < 25) return {
+                l: 'High',
+                c: RED,
+                include: true
+              };
+              return {
+                l: 'Very High',
+                c: "9B0000",
+                include: true
+              };
+            }; // ─────────────────────────────────────────────────────────
+            // DOCUMENT SECTIONS
+            // ─────────────────────────────────────────────────────────
+            ch = []; // children array
+            // ══ COVER ════════════════════════════════════════════════
+            ch.push(new Paragraph({
+              alignment: AlignmentType.CENTER,
+              spacing: {
+                before: 1000,
+                after: 200
+              },
+              children: [r("WWW", {
+                bold: true,
+                size: 96,
+                color: BTEAL
+              })]
+            }), new Paragraph({
+              alignment: AlignmentType.CENTER,
+              spacing: {
+                before: 0,
+                after: 80
+              },
+              border: {
+                bottom: {
+                  style: BorderStyle.SINGLE,
+                  size: 8,
+                  color: BTEAL,
+                  space: 6
+                }
+              },
+              children: [r("Property Inspection Ltd.", {
+                size: 32,
+                color: TEAL
+              })]
+            }), gap(300), new Paragraph({
+              alignment: AlignmentType.CENTER,
+              spacing: {
+                before: 0,
+                after: 60
+              },
+              children: [r("Residential Property Inspection Report", {
+                bold: true,
+                size: 40,
+                color: BLACK
+              })]
+            }), gap(200), infoTbl([["Property Address", cur.insp.address || "—"], ["Client", cur.client.name || "—"], ["Date of Inspection", "".concat(fmtDate(cur.insp.date), " at ").concat(cur.insp.time || "—")], ["File Number", cur.fileNo || "—"], ["Scope", cur.insp.scope || "—"], ["Inspector", cur.insp.inspector || "—"], ["Qualifications", cur.insp.qualifications || "—"]]), gap(300), pb());
+
+            // ══ GENERAL INFORMATION ═══════════════════════════════════
+            ch.push(h1P("General Information"), gap(60));
+            ch.push(h2P("Property & Inspection Details"));
+            ch.push(infoTbl([["Property Address", cur.insp.address || "—"], ["Date of Inspection", fmtDate(cur.insp.date)], ["Time of Inspection", cur.insp.time || "—"], ["Scope of Inspection", cur.insp.scope || "—"], ["Weather Conditions", cur.insp.weather || "—"], ["Ground Conditions", cur.insp.soil || "—"], ["Occupancy Status", cur.insp.occupancy || "—"], ["People Present", cur.insp.people || "—"], ["Areas Not Inspected", cur.insp.areasNotInspected || "—"]]));
+            ch.push(gap());
+            ch.push(h2P("Client Information"));
+            ch.push(infoTbl([["Client Name", cur.client.name || "—"], ["Phone", cur.client.phone || "—"], ["Email", cur.client.email || "—"], ["Report Delivery", cur.client.delivery || "—"], ["Payment Status", cur.client.payment || "—"]]));
+            ch.push(gap());
+            ch.push(h2P("Building Characteristics"));
+            ch.push(infoTbl([["Building Type", cur.bldg.type || "—"], ["Age of Building", cur.bldg.age ? "".concat(cur.bldg.age, " years") : "—"], ["Number of Storeys", cur.bldg.storeys || "—"], ["Construction Type", cur.bldg.construction || "—"], ["Wall Cladding", cur.bldg.cladding || "—"], ["Roof Type", cur.bldg.roof || "—"], ["Foundation Type", cur.bldg.foundation || "—"], ["Climate Zone", cur.bldg.climateZone || "—"], ["Exposure Zone", cur.bldg.exposureZone || "—"], ["Wind Zone", cur.bldg.windZone || "—"], ["Earthquake Zone", cur.bldg.earthquakeZone || "—"], ["Recent Alterations", cur.bldg.alterations || "None noted"]]));
+            ch.push(pb());
+
+            // ══ SEVERITY & COLOUR KEY ═════════════════════════════════
+            ch.push(h1P("Severity & Colour Key"), gap(60));
+            keyDefs = [["🔴 Significant Defect", RED, LRED, "Substantial repair or urgent action required. Cannot be resolved by routine maintenance."], ["🟠 Significant Maintenance Required", ORANGE, LORANGE, "Large or visible issue resolvable by maintenance. Risk to building fabric if ignored short-term."], ["🟡 Gradual Deterioration", YELLOW, LYELLOW, "Natural wear has reached a point where maintenance or replacement is required."]];
+            ch.push(new Table({
+              width: {
+                size: 9026,
+                type: WidthType.DXA
+              },
+              columnWidths: [3008, 3009, 3009],
+              rows: [new TableRow({
+                children: keyDefs.map(function (_ref33) {
+                  var _ref34 = _slicedToArray(_ref33, 4),
+                    lbl = _ref34[0],
+                    col = _ref34[1],
+                    bg = _ref34[2],
+                    desc = _ref34[3];
+                  return new TableCell({
+                    borders: _objectSpread(_objectSpread({}, noB()), {}, {
+                      left: {
+                        style: BorderStyle.SINGLE,
+                        size: 14,
+                        color: col
+                      }
+                    }),
+                    shading: {
+                      fill: bg,
+                      type: ShadingType.CLEAR
+                    },
+                    margins: {
+                      top: 120,
+                      bottom: 120,
+                      left: 140,
+                      right: 100
+                    },
+                    children: [new Paragraph({
+                      spacing: {
+                        after: 60
+                      },
+                      children: [r(lbl, {
+                        bold: true,
+                        size: 19,
+                        color: col
+                      })]
+                    }), new Paragraph({
+                      children: [r(desc, {
+                        size: 16,
+                        color: "555555"
+                      })]
+                    })]
+                  });
+                })
+              })]
+            }));
+            ch.push(gap(80));
+            ch.push(p("Particular Attribute and Further Investigation Required are not defect grades — they appear as supplementary labels within individual defect entries where applicable, and do not carry a colour code.", {
+              italics: true,
+              size: 17,
+              color: GRAY
+            }));
+            ch.push(gap());
+
+            // ══ WEATHERTIGHTNESS RISK ═════════════════════════════════
+            ch.push(h1P("Weathertightness Risk Rating"), gap(60));
+            wtCol = cur.wt.rating === 'HIGH' ? RED : cur.wt.rating === 'MEDIUM' ? ORANGE : "249689";
+            wtBg = cur.wt.rating === 'HIGH' ? LRED : cur.wt.rating === 'MEDIUM' ? LORANGE : "E8F5E9";
+            ch.push(new Table({
+              width: {
+                size: 9026,
+                type: WidthType.DXA
+              },
+              columnWidths: [9026],
+              rows: [new TableRow({
+                children: [new TableCell({
+                  borders: _objectSpread(_objectSpread({}, noB()), {}, {
+                    left: {
+                      style: BorderStyle.SINGLE,
+                      size: 18,
+                      color: wtCol
+                    }
+                  }),
+                  shading: {
+                    fill: wtBg,
+                    type: ShadingType.CLEAR
+                  },
+                  margins: {
+                    top: 180,
+                    bottom: 180,
+                    left: 220,
+                    right: 180
+                  },
+                  children: [new Paragraph({
+                    children: [r("".concat(cur.wt.rating || 'NOT ASSESSED', " WEATHERTIGHTNESS RISK PROFILE"), {
+                      bold: true,
+                      size: 30,
+                      color: wtCol
+                    })]
+                  }), cur.wt.context ? new Paragraph({
+                    spacing: {
+                      before: 140
+                    },
+                    children: [r(cur.wt.context, {
+                      size: 19
+                    })]
+                  }) : new Paragraph({
+                    children: [r('')]
+                  }), new Paragraph({
+                    spacing: {
+                      before: 100
+                    },
+                    children: [r("Invasive testing: ".concat(cur.wt.invasive || '—'), {
+                      size: 17,
+                      color: GRAY
+                    })]
+                  })]
+                })]
+              })]
+            }));
+            filledWTF = WT_FACTORS.filter(function (f) {
+              return cur.wt.factors[f.id];
+            });
+            if (filledWTF.length) {
+              ch.push(gap(80));
+              ch.push(h2P("Risk Factors Assessed"));
+              ch.push(infoTbl(filledWTF.map(function (f) {
+                var val = cur.wt.factors[f.id];
+                var hi = f.highRisk.includes(val);
+                return [f.label, val + (hi ? ' ⚠' : '')];
+              })));
+            }
+            ch.push(pb());
+
+            // ══ EXECUTIVE SUMMARY ═════════════════════════════════════
+            if (cur.execSummary) {
+              ch.push(h1P("Executive Summary"), gap(60));
+              ch.push(new Table({
+                width: {
+                  size: 9026,
+                  type: WidthType.DXA
+                },
+                columnWidths: [9026],
+                rows: [new TableRow({
+                  children: [new TableCell({
+                    borders: _objectSpread(_objectSpread({}, noB()), {}, {
+                      left: {
+                        style: BorderStyle.SINGLE,
+                        size: 12,
+                        color: "00BCD4"
+                      }
+                    }),
+                    shading: {
+                      fill: "F8FFFE",
+                      type: ShadingType.CLEAR
+                    },
+                    margins: {
+                      top: 160,
+                      bottom: 160,
+                      left: 200,
+                      right: 180
+                    },
+                    children: cur.execSummary.split('\n').filter(function (l) {
+                      return l.trim();
+                    }).map(function (line) {
+                      return new Paragraph({
+                        spacing: {
+                          before: 60,
+                          after: 60
+                        },
+                        children: [r(line, {
+                          size: 20
+                        })]
+                      });
+                    })
+                  })]
+                })]
+              }));
+              ch.push(pb());
+            }
+
+            // ══ DEFECT SUMMARY TABLE ══════════════════════════════════
+            if (flagged.length) {
+              ch.push(h1P("Defect Summary Table"), gap(60));
+              ch.push(new Table({
+                width: {
+                  size: 9026,
+                  type: WidthType.DXA
+                },
+                columnWidths: [700, 1800, 1500, 1900, 2426, 700],
+                rows: [new TableRow({
+                  children: ["Ref", "Grade", "Section", "Location", "Description (summary)", "Photos"].map(function (h) {
+                    return new TableCell({
+                      shading: {
+                        fill: BLACK,
+                        type: ShadingType.CLEAR
+                      },
+                      borders: allB("000000"),
+                      margins: {
+                        top: 80,
+                        bottom: 80,
+                        left: 100,
+                        right: 80
+                      },
+                      children: [new Paragraph({
+                        children: [r(h, {
+                          bold: true,
+                          size: 17,
+                          color: "FFFFFF"
+                        })]
+                      })]
+                    });
+                  })
+                })].concat(_toConsumableArray(flagged.map(function (d, i) {
+                  var _d$gc, _d$gc2, _d$gc3;
+                  return new TableRow({
+                    children: [new TableCell({
+                      shading: {
+                        fill: i % 2 === 0 ? "FFFFFF" : LGRAY,
+                        type: ShadingType.CLEAR
+                      },
+                      borders: allB(),
+                      margins: {
+                        top: 60,
+                        bottom: 60,
+                        left: 100,
+                        right: 60
+                      },
+                      children: [new Paragraph({
+                        children: [r(d.defectRef || '—', {
+                          bold: true,
+                          size: 16,
+                          color: ((_d$gc = d.gc) === null || _d$gc === void 0 ? void 0 : _d$gc.color) || GRAY,
+                          font: "Courier New"
+                        })]
+                      })]
+                    }), new TableCell({
+                      shading: {
+                        fill: i % 2 === 0 ? "FFFFFF" : LGRAY,
+                        type: ShadingType.CLEAR
+                      },
+                      borders: allB(),
+                      margins: {
+                        top: 60,
+                        bottom: 60,
+                        left: 100,
+                        right: 60
+                      },
+                      children: [new Paragraph({
+                        children: [r(((_d$gc2 = d.gc) === null || _d$gc2 === void 0 ? void 0 : _d$gc2.label) || '—', {
+                          size: 15,
+                          color: ((_d$gc3 = d.gc) === null || _d$gc3 === void 0 ? void 0 : _d$gc3.color) || GRAY,
+                          bold: true
+                        })]
+                      })]
+                    }), new TableCell({
+                      shading: {
+                        fill: i % 2 === 0 ? "FFFFFF" : LGRAY,
+                        type: ShadingType.CLEAR
+                      },
+                      borders: allB(),
+                      margins: {
+                        top: 60,
+                        bottom: 60,
+                        left: 100,
+                        right: 60
+                      },
+                      children: [new Paragraph({
+                        children: [r(d.catShort || '—', {
+                          size: 15,
+                          color: GRAY
+                        })]
+                      })]
+                    }), new TableCell({
+                      shading: {
+                        fill: i % 2 === 0 ? "FFFFFF" : LGRAY,
+                        type: ShadingType.CLEAR
+                      },
+                      borders: allB(),
+                      margins: {
+                        top: 60,
+                        bottom: 60,
+                        left: 100,
+                        right: 60
+                      },
+                      children: [new Paragraph({
+                        children: [r(d.location || '—', {
+                          size: 15
+                        })]
+                      })]
+                    }), new TableCell({
+                      shading: {
+                        fill: i % 2 === 0 ? "FFFFFF" : LGRAY,
+                        type: ShadingType.CLEAR
+                      },
+                      borders: allB(),
+                      margins: {
+                        top: 60,
+                        bottom: 60,
+                        left: 100,
+                        right: 60
+                      },
+                      children: [new Paragraph({
+                        children: [r((d.description || '—').slice(0, 80) + ((d.description || '').length > 80 ? '…' : ''), {
+                          size: 15
+                        })]
+                      })]
+                    }), new TableCell({
+                      shading: {
+                        fill: i % 2 === 0 ? "FFFFFF" : LGRAY,
+                        type: ShadingType.CLEAR
+                      },
+                      borders: allB(),
+                      margins: {
+                        top: 60,
+                        bottom: 60,
+                        left: 100,
+                        right: 60
+                      },
+                      children: [new Paragraph({
+                        children: [r(d.photoLabels || '—', {
+                          size: 14,
+                          color: "0097A7"
+                        })]
+                      })]
+                    })]
+                  });
+                })))
+              }));
+              ch.push(pb());
+            }
+
+            // ══ SIGNIFICANT DEFECTS ═══════════════════════════════════
+            if (sigDef.length) {
+              ch.push(h1P("Significant Defects"), gap(60));
+              sigDef.forEach(function (d, i) {
+                if (i > 0) ch.push(gap(100));
+                ch.push(defectBlock(d));
+              });
+              ch.push(pb());
+            }
+
+            // ══ SIGNIFICANT MAINTENANCE ════════════════════════════════
+            if (maintDef.length) {
+              ch.push(h1P("Significant Maintenance Required"), gap(60));
+              maintDef.forEach(function (d, i) {
+                if (i > 0) ch.push(gap(100));
+                ch.push(defectBlock(d));
+              });
+              if (detDef.length) ch.push(pb());else ch.push(gap());
+            }
+
+            // ══ GRADUAL DETERIORATION ═════════════════════════════════
+            if (detDef.length) {
+              ch.push(h1P("Gradual Deterioration"), gap(60));
+              detDef.forEach(function (d, i) {
+                if (i > 0) ch.push(gap(100));
+                ch.push(defectBlock(d));
+              });
+              ch.push(pb());
+            }
+
+            // ══ MOISTURE TEST ═════════════════════════════════════════
+            if (allReadings.length) {
+              ch.push(h1P("Moisture Test Results"), gap(60));
+              ch.push(infoTbl([["Meter Make / Model", cur.moisture.meterMake || "—"], ["Measurement Mode", cur.moisture.meterType || "—"], ["Control Reading", "".concat(cur.moisture.controlReading || '—', "% WME at ").concat(cur.moisture.controlLocation || '—')]]));
+              ch.push(gap(80));
+              ch.push(new Table({
+                width: {
+                  size: 9026,
+                  type: WidthType.DXA
+                },
+                columnWidths: [700, 2000, 1200, 1100, 900, 3126],
+                rows: [new TableRow({
+                  children: ["Ref", "Location", "Substrate", "Reading", "vs Control", "Assessment / Comment"].map(function (h) {
+                    return new TableCell({
+                      shading: {
+                        fill: "0097A7",
+                        type: ShadingType.CLEAR
+                      },
+                      borders: allB("000000"),
+                      margins: {
+                        top: 70,
+                        bottom: 70,
+                        left: 100,
+                        right: 80
+                      },
+                      children: [new Paragraph({
+                        children: [r(h, {
+                          bold: true,
+                          size: 16,
+                          color: "FFFFFF"
+                        })]
+                      })]
+                    });
+                  })
+                })].concat(_toConsumableArray(allReadings.map(function (rd, i) {
+                  var mc = mCls(rd.value);
+                  var val = parseFloat(rd.value);
+                  var diff = !isNaN(val) ? val - ctrlVal : null;
+                  var shade = i % 2 === 0 ? "FFFFFF" : LGRAY;
+                  return new TableRow({
+                    children: [new TableCell({
+                      shading: {
+                        fill: shade,
+                        type: ShadingType.CLEAR
+                      },
+                      borders: allB(),
+                      margins: {
+                        top: 60,
+                        bottom: 60,
+                        left: 100,
+                        right: 60
+                      },
+                      children: [new Paragraph({
+                        children: [r("M-".concat(String(i + 1).padStart(2, '0')), {
+                          bold: true,
+                          size: 16,
+                          color: "0097A7",
+                          font: "Courier New"
+                        })]
+                      })]
+                    }), new TableCell({
+                      shading: {
+                        fill: shade,
+                        type: ShadingType.CLEAR
+                      },
+                      borders: allB(),
+                      margins: {
+                        top: 60,
+                        bottom: 60,
+                        left: 100,
+                        right: 60
+                      },
+                      children: [new Paragraph({
+                        children: [r(rd.location || '—', {
+                          size: 15
+                        })]
+                      })]
+                    }), new TableCell({
+                      shading: {
+                        fill: shade,
+                        type: ShadingType.CLEAR
+                      },
+                      borders: allB(),
+                      margins: {
+                        top: 60,
+                        bottom: 60,
+                        left: 100,
+                        right: 60
+                      },
+                      children: [new Paragraph({
+                        children: [r(rd.substrate || '—', {
+                          size: 15,
+                          color: GRAY
+                        })]
+                      })]
+                    }), new TableCell({
+                      shading: {
+                        fill: shade,
+                        type: ShadingType.CLEAR
+                      },
+                      borders: allB(),
+                      margins: {
+                        top: 60,
+                        bottom: 60,
+                        left: 100,
+                        right: 60
+                      },
+                      children: [new Paragraph({
+                        children: [r(rd.value ? "".concat(rd.value, "%") : '—', {
+                          bold: true,
+                          size: 16
+                        })]
+                      })]
+                    }), new TableCell({
+                      shading: {
+                        fill: shade,
+                        type: ShadingType.CLEAR
+                      },
+                      borders: allB(),
+                      margins: {
+                        top: 60,
+                        bottom: 60,
+                        left: 100,
+                        right: 60
+                      },
+                      children: [new Paragraph({
+                        children: [r(diff !== null ? "".concat(diff > 0 ? '+' : '').concat(diff.toFixed(1), "%") : '—', {
+                          size: 15,
+                          color: mc.c
+                        })]
+                      })]
+                    }), new TableCell({
+                      shading: {
+                        fill: shade,
+                        type: ShadingType.CLEAR
+                      },
+                      borders: allB(),
+                      margins: {
+                        top: 60,
+                        bottom: 60,
+                        left: 100,
+                        right: 60
+                      },
+                      children: [new Paragraph({
+                        children: [r(mc.l, {
+                          bold: true,
+                          size: 16,
+                          color: mc.c
+                        })]
+                      }), rd.comment ? new Paragraph({
+                        spacing: {
+                          before: 30
+                        },
+                        children: [r(rd.comment, {
+                          size: 15,
+                          color: GRAY
+                        })]
+                      }) : new Paragraph({
+                        children: [r('')]
+                      })]
+                    })]
+                  });
+                })))
+              }));
+              ch.push(gap(80));
+              ch.push(p("Readings are relative (non-invasive capacitance mode). %WME is a wood-moisture-equivalent scale and is not an absolute moisture content measurement on non-timber substrates. Control readings were taken on a comparable dry substrate in the same area.", {
+                italics: true,
+                size: 17,
+                color: GRAY
+              }));
+              ch.push(gap());
+              ch.push(pb());
+            }
+
+            // ══ INSPECTOR NOTES ════════════════════════════════════════
+            if (cur.notes) {
+              ch.push(h1P("Inspector Notes"), gap(60));
+              cur.notes.split('\n').forEach(function (line) {
+                return ch.push(p(line));
+              });
+              ch.push(gap());
+              ch.push(pb());
+            }
+
+            // ══ CERTIFICATE OF INSPECTION ═════════════════════════════
+            ch.push(h1P("Certificate of Inspection"), gap(60));
+            ch.push(p("This report has been prepared by ".concat(cur.insp.inspector || '—', " (").concat(cur.insp.qualifications || '—', ") for the sole and exclusive use of ").concat(cur.client.name || 'the client', " only.")));
+            ch.push(gap(60));
+            ch.push(p("This inspection was visual and non-invasive only. Concealed building elements, including those within wall cavities, under floor coverings, and above ceiling linings, were not inspected and are excluded from this report."));
+            ch.push(gap(60));
+            ch.push(p("Areas not inspected: ".concat(cur.insp.areasNotInspected || '—')));
+            ch.push(gap(60));
+            ch.push(p("This report complies with NZS 4306:2005 Residential Property Inspection.", {
+              bold: true
+            }));
+            ch.push(gap(120));
+            ch.push(infoTbl([["File Number", cur.fileNo || '—'], ["Date of Inspection", fmtDate(cur.insp.date)], ["Inspector", cur.insp.inspector || '—'], ["Qualifications", cur.insp.qualifications || '—']]));
+
+            // ── Create & download document ──
+            doc = new Document({
+              styles: {
+                default: {
+                  document: {
+                    run: {
+                      font: "Arial",
+                      size: 20,
+                      color: BLACK
+                    }
+                  }
+                }
+              },
+              sections: [{
+                properties: {
+                  page: {
+                    size: {
+                      width: 11906,
+                      height: 16838
+                    },
+                    margin: {
+                      top: 1134,
+                      right: 1134,
+                      bottom: 1134,
+                      left: 1134
+                    }
+                  }
+                },
+                children: ch
+              }]
+            });
+            _context11.n = 3;
+            return Packer.toBlob(doc);
+          case 3:
+            blob = _context11.v;
+            url = URL.createObjectURL(blob);
+            a = document.createElement('a');
+            a.href = url;
+            a.download = "".concat(cur.fileNo, "_").concat((cur.client.name || 'report').replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-]/g, ''), ".docx");
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(function () {
+              return URL.revokeObjectURL(url);
+            }, 2000);
+            showToast('📄 Word document saved to Downloads ✓');
+            _context11.n = 5;
+            break;
+          case 4:
+            _context11.p = 4;
+            _t11 = _context11.v;
+            console.error('Word generation error:', _t11);
+            showToast('Word error: ' + _t11.message, 'error');
+          case 5:
+            setWordGenerating(false);
+          case 6:
+            return _context11.a(2);
+        }
+      }, _callee11, null, [[2, 4]]);
+    }));
+    return _generateWord.apply(this, arguments);
   }
   var prog = cur ? calcPct(cur) : 0;
   var flaggedItems = cur ? Object.entries(cur.items).filter(function (_ref0) {
@@ -3283,7 +4428,7 @@ function App() {
         border: "1px solid ".concat(cs === ST.done ? C.done : cs === ST.na ? C.border : C.amber)
       }
     }, cs)), cat.items.map(function (item) {
-      var _GRADES$find, _GRADES$find2, _d$photos, _GRADES$find3;
+      var _GRADES$find, _GRADES$find2, _GRADES$find3, _GRADES$find4, _d$photos, _GRADES$find5;
       var d = cur.items[item.id] || {};
       var expanded = d.status !== ST.pending || d.flagged;
       var incomplete = d.flagged && !isFlagComplete(d);
@@ -3302,14 +4447,32 @@ function App() {
           alignItems: 'center',
           gap: 8
         }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          flex: 1
+        }
       }, /*#__PURE__*/React.createElement("span", {
         style: {
-          flex: 1,
           fontSize: 13,
           fontWeight: 500,
           color: C.txt
         }
-      }, item.l), /*#__PURE__*/React.createElement("div", {
+      }, item.l), d.defectRef && d.flagged && /*#__PURE__*/React.createElement("span", {
+        style: {
+          marginLeft: 6,
+          fontFamily: 'monospace',
+          fontSize: 10,
+          fontWeight: 700,
+          padding: '1px 6px',
+          borderRadius: 4,
+          background: ((_GRADES$find2 = GRADES.find(function (g) {
+            return g.id === d.grade;
+          })) === null || _GRADES$find2 === void 0 ? void 0 : _GRADES$find2.bg) || '#F5F5F5',
+          color: ((_GRADES$find3 = GRADES.find(function (g) {
+            return g.id === d.grade;
+          })) === null || _GRADES$find3 === void 0 ? void 0 : _GRADES$find3.color) || C.txt2
+        }
+      }, d.defectRef)), /*#__PURE__*/React.createElement("div", {
         style: {
           display: 'flex',
           gap: 5
@@ -3363,9 +4526,9 @@ function App() {
           fontSize: 11,
           fontWeight: 700,
           cursor: 'pointer',
-          background: d.flagged ? ((_GRADES$find2 = GRADES.find(function (g) {
+          background: d.flagged ? ((_GRADES$find4 = GRADES.find(function (g) {
             return g.id === d.grade;
-          })) === null || _GRADES$find2 === void 0 ? void 0 : _GRADES$find2.color) || C.danger : C.bg,
+          })) === null || _GRADES$find4 === void 0 ? void 0 : _GRADES$find4.color) || C.danger : C.bg,
           color: d.flagged ? '#fff' : C.txt2
         }
       }, "\u2691"))), expanded && /*#__PURE__*/React.createElement("div", {
@@ -3437,9 +4600,9 @@ function App() {
           color: C.txt2,
           fontStyle: 'italic'
         }
-      }, (_GRADES$find3 = GRADES.find(function (g) {
+      }, (_GRADES$find5 = GRADES.find(function (g) {
         return g.id === d.grade;
-      })) === null || _GRADES$find3 === void 0 ? void 0 : _GRADES$find3.tip)), /*#__PURE__*/React.createElement(FRow, {
+      })) === null || _GRADES$find5 === void 0 ? void 0 : _GRADES$find5.tip)), /*#__PURE__*/React.createElement(FRow, {
         label: "Additional Attributes (optional)"
       }, /*#__PURE__*/React.createElement("div", {
         style: {
@@ -3727,20 +4890,23 @@ function App() {
       }
     }, "\u26A0 ", sigPct, "% of flagged items are Significant Defect \u2014 review classifications for over-rating"), errors.length > 0 && /*#__PURE__*/React.createElement(Card, {
       style: {
-        border: "2px solid ".concat(C.danger),
-        background: '#FFF0F0',
+        border: "1.5px solid ".concat(C.amber),
+        background: '#FFFBF0',
         marginBottom: 10
       }
     }, /*#__PURE__*/React.createElement(SecTitle, {
-      color: C.danger
-    }, "\u26A0 Required before report generation (", errors.length, ")"), errors.map(function (e, i) {
+      color: C.amber
+    }, "\u26A0 Incomplete items (", errors.length, ") \u2014 report will still generate"), errors.map(function (e, i) {
       return /*#__PURE__*/React.createElement("div", {
         key: i,
         style: {
           fontSize: 12,
-          color: C.danger,
+          color: '#D4820A',
           marginBottom: 4,
-          cursor: 'pointer'
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: 6
         },
         onClick: function onClick() {
           if (e.section === 'checklist' && e.catId) {
@@ -3751,7 +4917,12 @@ function App() {
           }
           setPage(e.section || 'info');
         }
-      }, "\u2022 ", e.msg);
+      }, /*#__PURE__*/React.createElement("span", null, "\u2022"), /*#__PURE__*/React.createElement("span", null, e.msg, " ", /*#__PURE__*/React.createElement("span", {
+        style: {
+          color: C.teal,
+          fontSize: 11
+        }
+      }, "(tap to fix)")));
     })), cur.wt.rating && /*#__PURE__*/React.createElement(Card, {
       style: {
         border: "2px solid ".concat(cur.wt.rating === 'HIGH' ? '#C62828' : cur.wt.rating === 'MEDIUM' ? '#EF6C00' : C.done)
@@ -3922,20 +5093,41 @@ function App() {
       placeholder: "e.g. 8.5"
     }))), /*#__PURE__*/React.createElement("label", {
       style: lbl
-    }, "Readings (Normal <15% excluded from report)"), (cur.moisture.readings || []).map(function (r, i) {
+    }, "Readings"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 11,
+        color: C.txt2,
+        marginBottom: 8,
+        background: '#F8FFFE',
+        border: "1px solid ".concat(C.teal),
+        borderRadius: 6,
+        padding: '6px 10px'
+      }
+    }, "Scale: Normal <15% \xB7 Elevated 15\u201320% \xB7 High 20\u201325% \xB7 Very High >25% WME", /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: C.amber
+      }
+    }, "Normal readings shown in app but excluded from PDF report (Audit 2 requirement)")), (cur.moisture.readings || []).map(function (r, i) {
       var v = parseFloat(r.value);
+      var ctrl = parseFloat(cur.moisture.controlReading) || 0;
+      var diff = isNaN(v) ? null : v - ctrl;
+      // Classification: both absolute and relative to control
       var rating = isNaN(v) ? null : v < 15 ? {
         l: 'Normal',
-        c: C.done
+        c: C.done,
+        include: false
       } : v < 20 ? {
         l: 'Elevated',
-        c: C.amber
+        c: C.amber,
+        include: true
       } : v < 25 ? {
         l: 'High',
-        c: C.danger
+        c: C.danger,
+        include: true
       } : {
         l: 'Very High',
-        c: '#9B0000'
+        c: '#9B0000',
+        include: true
       };
       return /*#__PURE__*/React.createElement("div", {
         key: i,
@@ -3944,26 +5136,43 @@ function App() {
           borderRadius: 8,
           padding: 10,
           marginBottom: 8,
-          border: "1px solid ".concat((rating === null || rating === void 0 ? void 0 : rating.c) || C.border)
+          border: "1.5px solid ".concat((rating === null || rating === void 0 ? void 0 : rating.c) || C.border),
+          opacity: rating && !rating.include ? 0.7 : 1
         }
       }, /*#__PURE__*/React.createElement("div", {
         style: {
           display: 'flex',
           justifyContent: 'space-between',
-          marginBottom: 6
+          alignItems: 'center',
+          marginBottom: 8
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8
         }
       }, /*#__PURE__*/React.createElement("span", {
         style: {
-          fontSize: 12,
-          fontWeight: 700
+          fontFamily: 'monospace',
+          fontSize: 11,
+          fontWeight: 700,
+          background: '#F1F4F8',
+          padding: '2px 6px',
+          borderRadius: 4
         }
-      }, "Reading ", i + 1), rating && /*#__PURE__*/React.createElement("span", {
+      }, "M-", String(i + 1).padStart(2, '0')), rating && /*#__PURE__*/React.createElement("span", {
         style: {
           fontSize: 11,
           fontWeight: 700,
           color: rating.c
         }
-      }, rating.l, " \u2014 ", r.value, "% WME"), /*#__PURE__*/React.createElement("button", {
+      }, rating.l, " \u2014 ", r.value, "% WME", diff !== null ? " (".concat(diff > 0 ? '+' : '').concat(diff.toFixed(1), " vs ctrl)") : ''), rating && !rating.include && /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontSize: 10,
+          color: C.txt2
+        }
+      }, "\u2014 excluded from PDF")), /*#__PURE__*/React.createElement("button", {
         onClick: function onClick() {
           var rds = _toConsumableArray(cur.moisture.readings);
           rds.splice(i, 1);
@@ -3978,13 +5187,13 @@ function App() {
           border: 'none',
           color: C.danger,
           cursor: 'pointer',
-          fontSize: 12
+          fontSize: 14
         }
       }, "\u2715")), /*#__PURE__*/React.createElement("input", {
         style: _objectSpread(_objectSpread({}, inp), {}, {
           marginBottom: 6
         }),
-        placeholder: "Location e.g. Bathroom 1 \u2014 shower wall, 300mm AFl",
+        placeholder: "Location \u2014 e.g. Bathroom 1, shower wall, 300mm above floor",
         value: r.location || '',
         onChange: function onChange(e) {
           var rds = _toConsumableArray(cur.moisture.readings);
@@ -3997,10 +5206,13 @@ function App() {
             })
           }));
         }
-      }), /*#__PURE__*/React.createElement(FRow2, null, /*#__PURE__*/React.createElement("input", {
+      }), /*#__PURE__*/React.createElement(FRow2, null, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+        style: lbl
+      }, "Reading (% WME)"), /*#__PURE__*/React.createElement("input", {
         style: inp,
         type: "number",
-        placeholder: "Reading (% WME)",
+        step: "0.1",
+        placeholder: "e.g. 18.5",
         value: r.value || '',
         onChange: function onChange(e) {
           var rds = _toConsumableArray(cur.moisture.readings);
@@ -4013,9 +5225,31 @@ function App() {
             })
           }));
         }
-      }), /*#__PURE__*/React.createElement("input", {
+      })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+        style: lbl
+      }, "Substrate"), /*#__PURE__*/React.createElement("select", {
         style: inp,
-        placeholder: "Comment",
+        value: r.substrate || '',
+        onChange: function onChange(e) {
+          var rds = _toConsumableArray(cur.moisture.readings);
+          rds[i] = _objectSpread(_objectSpread({}, rds[i]), {}, {
+            substrate: e.target.value
+          });
+          saveInspection(_objectSpread(_objectSpread({}, cur), {}, {
+            moisture: _objectSpread(_objectSpread({}, cur.moisture), {}, {
+              readings: rds
+            })
+          }));
+        }
+      }, /*#__PURE__*/React.createElement("option", {
+        value: ""
+      }, "Select"), ['Timber framing', 'GIB / plasterboard', 'Painted GIB', 'Fibre cement', 'Concrete', 'Brick', 'Tile', 'Other'].map(function (o) {
+        return /*#__PURE__*/React.createElement("option", {
+          key: o
+        }, o);
+      })))), /*#__PURE__*/React.createElement("input", {
+        style: inp,
+        placeholder: "Comment \u2014 e.g. Consistent with concealed moisture at window junction",
         value: r.comment || '',
         onChange: function onChange(e) {
           var rds = _toConsumableArray(cur.moisture.readings);
@@ -4028,7 +5262,7 @@ function App() {
             })
           }));
         }
-      })));
+      }));
     }), /*#__PURE__*/React.createElement("button", {
       onClick: function onClick() {
         return saveInspection(_objectSpread(_objectSpread({}, cur), {}, {
@@ -4115,82 +5349,12 @@ function App() {
         }));
       }
     })), /*#__PURE__*/React.createElement(BtnPrimary, {
-      onClick: /*#__PURE__*/_asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee3() {
-        var errs, flagged, sigDefects, otherDefects, elevated, w;
-        return _regenerator().w(function (_context3) {
-          while (1) switch (_context3.n) {
-            case 0:
-              errs = validateReport(cur);
-              if (!(errs.length > 0)) {
-                _context3.n = 1;
-                break;
-              }
-              setValidationErrors(errs);
-              return _context3.a(2);
-            case 1:
-              // Generate report (basic print for Phase A — Phase C will have proper PDF)
-              flagged = flaggedItems.map(function (_ref29) {
-                var _ref30 = _slicedToArray(_ref29, 2),
-                  itemId = _ref30[0],
-                  d = _ref30[1];
-                var catObj = CATS.find(function (c) {
-                  return c.items.find(function (i) {
-                    return i.id === itemId;
-                  });
-                });
-                var itemObj = catObj === null || catObj === void 0 ? void 0 : catObj.items.find(function (i) {
-                  return i.id === itemId;
-                });
-                var grade = GRADES.find(function (g) {
-                  return g.id === d.grade;
-                });
-                return _objectSpread(_objectSpread({
-                  cat: catObj === null || catObj === void 0 ? void 0 : catObj.label,
-                  item: itemObj === null || itemObj === void 0 ? void 0 : itemObj.l
-                }, d), {}, {
-                  gradeLabel: grade === null || grade === void 0 ? void 0 : grade.label,
-                  gradeColor: grade === null || grade === void 0 ? void 0 : grade.color
-                });
-              });
-              sigDefects = flagged.filter(function (d) {
-                return d.grade === 'significant';
-              });
-              otherDefects = flagged.filter(function (d) {
-                return d.grade !== 'significant';
-              });
-              elevated = (cur.moisture.readings || []).filter(function (r) {
-                return parseFloat(r.value) >= 15;
-              });
-              w = window.open('', '_blank');
-              w.document.write("<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>WWW Report \u2014 ".concat(cur.insp.address, "</title>\n<style>body{font-family:Arial,sans-serif;max-width:820px;margin:0 auto;padding:24px;color:#14181B;font-size:13px;line-height:1.5}\n.logo{font-size:32px;font-weight:900;color:#00BCD4}.fileno{font-family:monospace;font-size:12px;color:#57636C}\nh1{color:#14181B;font-size:20px;border-bottom:3px solid #00BCD4;padding-bottom:8px;margin-top:20px}\nh2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:#00BCD4;margin-top:18px}\n.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px}\n.cell{padding:8px;background:#F1F4F8;border-radius:6px}.cell label{font-weight:700;display:block;font-size:10px;color:#57636C;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px}\n.wt{padding:12px 16px;border-radius:8px;margin:12px 0}.wt-high{background:#FFEBEE;border-left:5px solid #C62828}.wt-medium{background:#FFF3E0;border-left:5px solid #EF6C00}.wt-low{background:#E8F5E9;border-left:5px solid #249689}\n.exec{background:#F8FFFE;border-left:4px solid #00BCD4;padding:14px;margin:12px 0;border-radius:0 8px 8px 0;white-space:pre-wrap;line-height:1.7}\ntable{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:16px}\nth{background:#14181B;color:#fff;padding:8px 10px;text-align:left;font-size:11px}\ntd{padding:8px 10px;border-bottom:1px solid #E0E3E7;vertical-align:top}\n.sig-row td:first-child{border-left:3px solid #C62828}.maint-row td:first-child{border-left:3px solid #EF6C00}.det-row td:first-child{border-left:3px solid #F9A825}\n.key-section{background:#F8F8F8;border-radius:8px;padding:14px;margin:16px 0}\n@media print{body{padding:0}}</style></head><body>\n<div class=\"logo\">WWW</div>\n<div style=\"font-size:12px;color:#57636C\">").concat(cur.insp.inspector || 'WWW Property Inspection', " | ").concat(cur.insp.qualifications || '', "</div>\n<div class=\"fileno\">File No. ").concat(cur.fileNo, "</div>\n<h1>Residential Property Inspection Report</h1>\n<div class=\"grid\">\n<div class=\"cell\"><label>Property</label>").concat(cur.insp.address || '—', "</div>\n<div class=\"cell\"><label>Client</label>").concat(cur.client.name || '—', "</div>\n<div class=\"cell\"><label>Date / Time</label>").concat(fmtDate(cur.insp.date), " at ").concat(cur.insp.time || '—', "</div>\n<div class=\"cell\"><label>Scope</label>").concat(cur.insp.scope || '—', "</div>\n<div class=\"cell\"><label>Weather / Ground</label>").concat(cur.insp.weather || '—', " / ").concat(cur.insp.soil || '—', "</div>\n<div class=\"cell\"><label>Occupancy</label>").concat(cur.insp.occupancy || '—', "</div>\n<div class=\"cell\"><label>Construction / Cladding</label>").concat(cur.bldg.construction || '—', " | ").concat(cur.bldg.cladding || '—', "</div>\n<div class=\"cell\"><label>Age / Storeys</label>").concat(cur.bldg.age || '—', " yrs / ").concat(cur.bldg.storeys || '—', "</div>\n<div class=\"cell\"><label>Roof / Foundation</label>").concat(cur.bldg.roof || '—', " / ").concat(cur.bldg.foundation || '—', "</div>\n<div class=\"cell\"><label>People Present</label>").concat(cur.insp.people || '—', "</div>\n</div>\n<h2>Severity Colour Key</h2>\n<div class=\"key-section\" style=\"display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px\">\n<div style=\"border-left:4px solid #C62828;padding:6px 10px;background:#FFEBEE\"><strong style=\"color:#C62828;font-size:12px\">\uD83D\uDD34 Significant Defect</strong><br><span style=\"font-size:11px;color:#555\">Substantial repair required. Not resolvable by maintenance.</span></div>\n<div style=\"border-left:4px solid #EF6C00;padding:6px 10px;background:#FFF3E0\"><strong style=\"color:#EF6C00;font-size:12px\">\uD83D\uDFE0 Significant Maintenance</strong><br><span style=\"font-size:11px;color:#555\">Large/visible. Resolvable by maintenance. Risk if ignored.</span></div>\n<div style=\"border-left:4px solid #F9A825;padding:6px 10px;background:#FFFDE7\"><strong style=\"color:#F9A825;font-size:12px\">\uD83D\uDFE1 Gradual Deterioration</strong><br><span style=\"font-size:11px;color:#555\">Natural wear requiring maintenance or replacement.</span></div>\n</div>\n<h2>Weathertightness Risk Rating</h2>\n<div class=\"wt wt-").concat((cur.wt.rating || 'low').toLowerCase(), "\">\n<div style=\"font-size:18px;font-weight:900;color:").concat(cur.wt.rating === 'HIGH' ? '#C62828' : cur.wt.rating === 'MEDIUM' ? '#EF6C00' : '#249689', "\">").concat(cur.wt.rating || '—', " WEATHERTIGHTNESS RISK PROFILE</div>\n").concat(cur.wt.context ? "<p style=\"margin:8px 0 0\">".concat(cur.wt.context, "</p>") : '', "\n<p style=\"margin:8px 0 0;font-size:11px;color:#57636C\">Invasive testing: ").concat(cur.wt.invasive || '—', "</p>\n</div>\n").concat(cur.execSummary ? "<h2>Executive Summary</h2><div class=\"exec\">".concat(cur.execSummary, "</div>") : '', "\n").concat(sigDefects.length ? "<h2>\uD83D\uDD34 Significant Defects</h2><table><tr><th style=\"width:30%\">Category / Item</th><th>Details</th></tr>".concat(sigDefects.map(function (d) {
-                return "<tr class=\"sig-row\"><td><strong>".concat(d.cat, "</strong><br>").concat(d.item).concat((d.axes || []).length ? "<br><em style=\"font-size:11px;color:#57636C\">".concat(d.axes.map(function (a) {
-                  var _AXES$find2;
-                  return (_AXES$find2 = AXES.find(function (x) {
-                    return x.id === a;
-                  })) === null || _AXES$find2 === void 0 ? void 0 : _AXES$find2.label;
-                }).join(', '), "</em>") : '', "</td><td><div style=\"margin-bottom:5px\"><strong style=\"font-size:10px;color:#57636C;text-transform:uppercase\">Location</strong><br>").concat(d.location || '—', "</div><div style=\"margin-bottom:5px\"><strong style=\"font-size:10px;color:#57636C;text-transform:uppercase\">Description</strong><br>").concat(d.description || '—', "</div><div style=\"margin-bottom:5px\"><strong style=\"font-size:10px;color:#57636C;text-transform:uppercase\">Implication</strong><br>").concat(d.implication || '—', "</div><div><strong style=\"font-size:10px;color:#57636C;text-transform:uppercase\">Recommendation</strong><br>").concat(d.recommendation || '—', "</div></td></tr>");
-              }).join(''), "</table>") : '', "\n").concat(otherDefects.length ? "<h2>\uD83D\uDFE0\uD83D\uDFE1 Maintenance & Deterioration Items</h2><table><tr><th style=\"width:30%\">Category / Item</th><th>Details</th></tr>".concat(otherDefects.map(function (d) {
-                return "<tr class=\"".concat(d.grade === 'maintenance' ? 'maint-row' : 'det-row', "\"><td><strong>").concat(d.cat, "</strong><br>").concat(d.item, "</td><td><div style=\"margin-bottom:5px\"><strong style=\"font-size:10px;color:#57636C;text-transform:uppercase\">Location</strong><br>").concat(d.location || '—', "</div><div style=\"margin-bottom:5px\"><strong style=\"font-size:10px;color:#57636C;text-transform:uppercase\">Description</strong><br>").concat(d.description || '—', "</div><div style=\"margin-bottom:5px\"><strong style=\"font-size:10px;color:#57636C;text-transform:uppercase\">Implication</strong><br>").concat(d.implication || '—', "</div><div><strong style=\"font-size:10px;color:#57636C;text-transform:uppercase\">Recommendation</strong><br>").concat(d.recommendation || '—', "</div></td></tr>");
-              }).join(''), "</table>") : '', "\n").concat(elevated.length ? "<h2>Moisture Test Results</h2><p style=\"font-size:12px;color:#57636C\">Meter: ".concat(cur.moisture.meterMake || '—', " | Mode: ").concat(cur.moisture.meterType || '—', " | Control: ").concat(cur.moisture.controlReading || '—', "% WME (").concat(cur.moisture.controlLocation || '—', ")</p><table><tr><th>Location</th><th>Reading (% WME)</th><th>Classification</th><th>Comment</th></tr>").concat(elevated.map(function (r) {
-                var v = parseFloat(r.value);
-                var l = v < 20 ? 'Elevated' : v < 25 ? 'High' : 'Very High';
-                var cl = v < 20 ? '#EF6C00' : v < 25 ? '#C62828' : '#9B0000';
-                return "<tr><td>".concat(r.location || '—', "</td><td style=\"font-weight:700\">").concat(r.value, "%</td><td style=\"color:").concat(cl, ";font-weight:700\">").concat(l, "</td><td>").concat(r.comment || '—', "</td></tr>");
-              }).join(''), "</table><p style=\"font-size:11px;color:#57636C;font-style:italic\">Readings are relative (non-invasive capacitance mode). %WME is a wood-moisture-equivalent scale and is not an absolute moisture content on non-timber substrates. Control readings were taken on comparable dry substrate.</p>") : '', "\n").concat(cur.notes ? "<h2>Inspector Notes</h2><p style=\"white-space:pre-wrap;line-height:1.6\">".concat(cur.notes, "</p>") : '', "\n<div style=\"margin-top:28px;border-top:1px solid #E0E3E7;padding-top:12px;font-size:10px;color:#57636C\">\n<strong>Certificate of Inspection</strong><br>\nPrepared by ").concat(cur.insp.inspector || '—', " (").concat(cur.insp.qualifications || '—', ") for the exclusive use of ").concat(cur.client.name || 'the client', " only.\nThis inspection was visual and non-invasive. Areas not inspected: ").concat(cur.insp.areasNotInspected || '—', ".\nNZS 4306:2005 Residential Property Inspection.<br>\nFile No: ").concat(cur.fileNo, " | Date: ").concat(fmtDate(cur.insp.date), "\n</div>\n</body></html>"));
-              w.document.close();
-              setTimeout(function () {
-                return w.print();
-              }, 400);
-            case 2:
-              return _context3.a(2);
-          }
-        }, _callee3);
-      })),
-      disabled: errors.length > 0,
+      onClick: generateWord,
+      disabled: wordGenerating,
       style: {
         marginBottom: 8
       }
-    }, errors.length > 0 ? "\u26A0 ".concat(errors.length, " issue").concat(errors.length > 1 ? 's' : '', " \u2014 fix before report") : '📄 Generate PDF Report'), /*#__PURE__*/React.createElement(BtnSecondary, {
+    }, wordGenerating ? '⏳ Generating Word document…' : "\uD83D\uDCC4 Generate Word Report".concat(errors.length > 0 ? " (".concat(errors.length, " warning").concat(errors.length > 1 ? 's' : '', ")") : '')), /*#__PURE__*/React.createElement(BtnSecondary, {
       onClick: function onClick() {
         return setPage('checklist');
       }
@@ -4248,26 +5412,26 @@ function App() {
       placeholder: "Caption (required for report)",
       value: (photoRef === null || photoRef === void 0 ? void 0 : photoRef.caption) || '',
       onChange: (/*#__PURE__*/function () {
-        var _ref31 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee4(e) {
+        var _ref28 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee3(e) {
           var photos;
-          return _regenerator().w(function (_context4) {
-            while (1) switch (_context4.n) {
+          return _regenerator().w(function (_context3) {
+            while (1) switch (_context3.n) {
               case 0:
                 photos = _toConsumableArray(d.photos);
                 photos[photoMod.idx] = _objectSpread(_objectSpread({}, photos[photoMod.idx]), {}, {
                   caption: e.target.value
                 });
-                _context4.n = 1;
+                _context3.n = 1;
                 return updItem(photoMod.itemId, {
                   photos: photos
                 });
               case 1:
-                return _context4.a(2);
+                return _context3.a(2);
             }
-          }, _callee4);
+          }, _callee3);
         }));
         return function (_x22) {
-          return _ref31.apply(this, arguments);
+          return _ref28.apply(this, arguments);
         };
       }())
     }), /*#__PURE__*/React.createElement("button", {
@@ -4300,7 +5464,7 @@ function App() {
         var splash = document.getElementById('splash');
         if (splash) { splash.style.opacity='0'; setTimeout(function(){ if(splash.parentNode) splash.parentNode.removeChild(splash); }, 450); }
       }, 400);
-    } catch(e) { showErr('Start error: '+e.message); }
+    } catch(e) { showErr('Start error: '+e.message+'\n'+(e.stack||'')); }
   </script>
 </body>
 </html>
