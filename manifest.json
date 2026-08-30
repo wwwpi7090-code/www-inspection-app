@@ -1,0 +1,28 @@
+{
+  "name": "WWW Property Inspection",
+  "short_name": "WWW Inspect",
+  "description": "NZS 4306:2005 Compliant AI-Assisted Property Inspection App",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#14181B",
+  "theme_color": "#00BCD4",
+  "lang": "en-NZ",
+  "categories": ["productivity", "utilities"],
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [],
+  "prefer_related_applications": false
+}
