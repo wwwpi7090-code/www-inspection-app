@@ -27,7 +27,7 @@
     <div class="logo">WWW</div>
     <div class="bar"></div>
     <div class="sub">Property Inspection Ltd.</div>
-    <div class="ver">NZS 4306:2005 · v3.2 (Items 06–12)</div>
+    <div class="ver">NZS 4306:2005</div>
     <div class="status" id="status">Initialising…</div>
   </div>
   <div id="root"></div>
@@ -548,6 +548,9 @@ function _checkStorageQuota() {
   }));
   return _checkStorageQuota.apply(this, arguments);
 }
+var APP_VERSION = 'v3.2';
+var APP_DATE = '2026-09-01'; // Update this on each release
+var APP_VER_DISPLAY = "".concat(APP_VERSION, " \xB7 ").concat(APP_DATE);
 var ST = {
   pending: 'PENDING',
   done: 'DONE',
@@ -1426,14 +1429,17 @@ var lbl = {
 var Card = function Card(_ref) {
   var children = _ref.children,
     _ref$style = _ref.style,
-    style = _ref$style === void 0 ? {} : _ref$style;
+    style = _ref$style === void 0 ? {} : _ref$style,
+    onClick = _ref.onClick;
   return /*#__PURE__*/React.createElement("div", {
+    onClick: onClick,
     style: _objectSpread({
       background: C.white,
       borderRadius: 12,
       padding: 16,
       boxShadow: '0 1px 4px rgba(0,0,0,.07)',
-      marginBottom: 10
+      marginBottom: 10,
+      cursor: onClick ? 'pointer' : undefined
     }, style)
   }, children);
 };
@@ -4022,7 +4028,13 @@ function App() {
       fontSize: 12,
       color: '#57636C'
     }
-  }, "AI-powered \xB7 NZS 4306:2005"), !dbReady && /*#__PURE__*/React.createElement("div", {
+  }, "AI-powered \xB7 NZS 4306:2005"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: '#3D4451',
+      marginTop: 6
+    }
+  }, APP_VER_DISPLAY), !dbReady && /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 11,
       color: '#3D4451',
@@ -4083,7 +4095,7 @@ function App() {
       color: '#57636C',
       marginTop: 4
     }
-  }, "NZS 4306:2005 \u2014 Phase A v3.1")), /*#__PURE__*/React.createElement("div", {
+  }, "NZS 4306:2005 \xB7 ", APP_VER_DISPLAY)), /*#__PURE__*/React.createElement("div", {
     style: {
       padding: 20
     }
@@ -4265,7 +4277,7 @@ function App() {
       fontSize: 11,
       marginTop: 24
     }
-  }, "NZS 4306:2005 \xB7 BOINZ ABS")));
+  }, "NZS 4306:2005 \xB7 BOINZ ABS \xB7 ", APP_VER_DISPLAY)));
 
   // ═══ INFO (DETAILS) PAGE ══════════════════════════════════════
   if (page === 'info' && cur) {
