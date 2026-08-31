@@ -27,25 +27,20 @@
     <div class="logo">WWW</div>
     <div class="bar"></div>
     <div class="sub">Property Inspection Ltd.</div>
-    <div class="ver">NZS 4306:2005 · Phase B v3.1</div>
+    <div class="ver">NZS 4306:2005 · v3.1</div>
     <div class="status" id="status">Initialising…</div>
   </div>
   <div id="root"></div>
   <div id="err"></div>
-
-  <!-- React 18 -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <!-- docx library for Word generation -->
   <script src="https://unpkg.com/docx@9.6.1/build/index.js"></script>
-
   <script>
     function showErr(msg) { var e=document.getElementById('err'); e.textContent=msg; e.style.display='block'; document.getElementById('status').textContent='Error'; }
     window.onerror = function(msg,src,line) { showErr('Error (L'+line+'): '+msg); return true; };
     window.addEventListener('unhandledrejection', function(e) { showErr('Promise error: '+(e.reason&&e.reason.message?e.reason.message:String(e.reason))); });
     document.getElementById('status').textContent = 'Loading…';
   </script>
-
   <script>
 function _typeof(o) { "@babel/helpers - typeof"; return _typeof = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function (o) { return typeof o; } : function (o) { return o && "function" == typeof Symbol && o.constructor === Symbol && o !== Symbol.prototype ? "symbol" : typeof o; }, _typeof(o); }
 function _createForOfIteratorHelper(r, e) { var t = "undefined" != typeof Symbol && r[Symbol.iterator] || r["@@iterator"]; if (!t) { if (Array.isArray(r) || (t = _unsupportedIterableToArray(r)) || e && r && "number" == typeof r.length) { t && (r = t); var _n = 0, F = function F() {}; return { s: F, n: function n() { return _n >= r.length ? { done: !0 } : { done: !1, value: r[_n++] }; }, e: function e(r) { throw r; }, f: F }; } throw new TypeError("Invalid attempt to iterate non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method."); } var o, a = !0, u = !1; return { s: function s() { t = t.call(r); }, n: function n() { var r = t.next(); return a = r.done, r; }, e: function e(r) { u = !0, o = r; }, f: function f() { try { a || null == t.return || t.return(); } finally { if (u) throw o; } } }; }
@@ -106,17 +101,17 @@ function openDB() {
   return _openDB.apply(this, arguments);
 }
 function _openDB() {
-  _openDB = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee12() {
-    return _regenerator().w(function (_context12) {
-      while (1) switch (_context12.n) {
+  _openDB = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee13() {
+    return _regenerator().w(function (_context13) {
+      while (1) switch (_context13.n) {
         case 0:
           if (!_dbInstance) {
-            _context12.n = 1;
+            _context13.n = 1;
             break;
           }
-          return _context12.a(2, _dbInstance);
+          return _context13.a(2, _dbInstance);
         case 1:
-          return _context12.a(2, new Promise(function (resolve, reject) {
+          return _context13.a(2, new Promise(function (resolve, reject) {
             var req = indexedDB.open(DB_NAME, DB_VERSION);
             req.onupgradeneeded = function (e) {
               var db = e.target.result;
@@ -146,7 +141,7 @@ function _openDB() {
             };
           }));
       }
-    }, _callee12);
+    }, _callee13);
   }));
   return _openDB.apply(this, arguments);
 }
@@ -154,16 +149,16 @@ function dbTx(_x, _x2, _x3) {
   return _dbTx.apply(this, arguments);
 }
 function _dbTx() {
-  _dbTx = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee13(storeName, mode, fn) {
+  _dbTx = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee14(storeName, mode, fn) {
     var db;
-    return _regenerator().w(function (_context13) {
-      while (1) switch (_context13.n) {
+    return _regenerator().w(function (_context14) {
+      while (1) switch (_context14.n) {
         case 0:
-          _context13.n = 1;
+          _context14.n = 1;
           return openDB();
         case 1:
-          db = _context13.v;
-          return _context13.a(2, new Promise(function (resolve, reject) {
+          db = _context14.v;
+          return _context14.a(2, new Promise(function (resolve, reject) {
             var tx = db.transaction(storeName, mode);
             var store = tx.objectStore(storeName);
             try {
@@ -188,7 +183,7 @@ function _dbTx() {
             }
           }));
       }
-    }, _callee13);
+    }, _callee14);
   }));
   return _dbTx.apply(this, arguments);
 }
@@ -216,16 +211,16 @@ function dbGetByIndex(_x4, _x5, _x6) {
   return _dbGetByIndex.apply(this, arguments);
 } // Read-back verification
 function _dbGetByIndex() {
-  _dbGetByIndex = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee14(store, indexName, value) {
+  _dbGetByIndex = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee15(store, indexName, value) {
     var db;
-    return _regenerator().w(function (_context14) {
-      while (1) switch (_context14.n) {
+    return _regenerator().w(function (_context15) {
+      while (1) switch (_context15.n) {
         case 0:
-          _context14.n = 1;
+          _context15.n = 1;
           return openDB();
         case 1:
-          db = _context14.v;
-          return _context14.a(2, new Promise(function (resolve, reject) {
+          db = _context15.v;
+          return _context15.a(2, new Promise(function (resolve, reject) {
             var tx = db.transaction(store, 'readonly');
             var req = tx.objectStore(store).index(indexName).getAll(value);
             req.onsuccess = function () {
@@ -236,7 +231,7 @@ function _dbGetByIndex() {
             };
           }));
       }
-    }, _callee14);
+    }, _callee15);
   }));
   return _dbGetByIndex.apply(this, arguments);
 }
@@ -244,28 +239,28 @@ function dbPutVerified(_x7, _x8) {
   return _dbPutVerified.apply(this, arguments);
 } // ─── LOCALSTORAGE MIGRATION ──────────────────────────────────
 function _dbPutVerified() {
-  _dbPutVerified = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee15(store, data) {
+  _dbPutVerified = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee16(store, data) {
     var key, readback;
-    return _regenerator().w(function (_context15) {
-      while (1) switch (_context15.n) {
+    return _regenerator().w(function (_context16) {
+      while (1) switch (_context16.n) {
         case 0:
-          _context15.n = 1;
+          _context16.n = 1;
           return dbPut(store, data);
         case 1:
           key = data[store === 'photos' ? 'photoId' : 'id'];
-          _context15.n = 2;
+          _context16.n = 2;
           return dbGet(store, key);
         case 2:
-          readback = _context15.v;
+          readback = _context16.v;
           if (readback) {
-            _context15.n = 3;
+            _context16.n = 3;
             break;
           }
           throw new Error("Read-back failed for ".concat(store, "/").concat(key));
         case 3:
-          return _context15.a(2, readback);
+          return _context16.a(2, readback);
       }
-    }, _callee15);
+    }, _callee16);
   }));
   return _dbPutVerified.apply(this, arguments);
 }
@@ -273,10 +268,10 @@ function migrateFromLocalStorage() {
   return _migrateFromLocalStorage.apply(this, arguments);
 } // ─── IMAGE UTILITIES ─────────────────────────────────────────
 function _migrateFromLocalStorage() {
-  _migrateFromLocalStorage = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee16() {
-    var LS_KEYS, raw, foundKey, _i, _LS_KEYS, k, v, inspections, migrated, _iterator2, _step2, ins, migratedItems, _i2, _Object$entries, _Object$entries$_i, itemId, itemData, photoRefs, oldPhotos, i, ph, base64, blob, photoId, _t12, _t13, _t14, _t15;
-    return _regenerator().w(function (_context16) {
-      while (1) switch (_context16.p = _context16.n) {
+  _migrateFromLocalStorage = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee17() {
+    var LS_KEYS, raw, foundKey, _i, _LS_KEYS, k, v, inspections, migrated, _iterator2, _step2, ins, migratedItems, _i2, _Object$entries, _Object$entries$_i, itemId, itemData, photoRefs, oldPhotos, i, ph, base64, blob, photoId, _t13, _t14, _t15, _t16;
+    return _regenerator().w(function (_context17) {
+      while (1) switch (_context17.p = _context17.n) {
         case 0:
           LS_KEYS = ['www_insp_v3', 'www_insp_v2', 'www_inspections_v1', 'www_inspections'];
           raw = null;
@@ -284,61 +279,61 @@ function _migrateFromLocalStorage() {
           _i = 0, _LS_KEYS = LS_KEYS;
         case 1:
           if (!(_i < _LS_KEYS.length)) {
-            _context16.n = 3;
+            _context17.n = 3;
             break;
           }
           k = _LS_KEYS[_i];
           v = localStorage.getItem(k);
           if (!v) {
-            _context16.n = 2;
+            _context17.n = 2;
             break;
           }
           raw = v;
           foundKey = k;
-          return _context16.a(3, 3);
+          return _context17.a(3, 3);
         case 2:
           _i++;
-          _context16.n = 1;
+          _context17.n = 1;
           break;
         case 3:
           if (raw) {
-            _context16.n = 4;
+            _context17.n = 4;
             break;
           }
-          return _context16.a(2, 0);
+          return _context17.a(2, 0);
         case 4:
           inspections = [];
-          _context16.p = 5;
+          _context17.p = 5;
           inspections = JSON.parse(raw);
-          _context16.n = 7;
+          _context17.n = 7;
           break;
         case 6:
-          _context16.p = 6;
-          _t12 = _context16.v;
-          return _context16.a(2, 0);
+          _context17.p = 6;
+          _t13 = _context17.v;
+          return _context17.a(2, 0);
         case 7:
           if (!(!Array.isArray(inspections) || !inspections.length)) {
-            _context16.n = 8;
+            _context17.n = 8;
             break;
           }
-          return _context16.a(2, 0);
+          return _context17.a(2, 0);
         case 8:
           migrated = 0;
           _iterator2 = _createForOfIteratorHelper(inspections);
-          _context16.p = 9;
+          _context17.p = 9;
           _iterator2.s();
         case 10:
           if ((_step2 = _iterator2.n()).done) {
-            _context16.n = 25;
+            _context17.n = 25;
             break;
           }
           ins = _step2.value;
-          _context16.p = 11;
+          _context17.p = 11;
           migratedItems = {};
           _i2 = 0, _Object$entries = Object.entries(ins.items || {});
         case 12:
           if (!(_i2 < _Object$entries.length)) {
-            _context16.n = 21;
+            _context17.n = 21;
             break;
           }
           _Object$entries$_i = _slicedToArray(_Object$entries[_i2], 2), itemId = _Object$entries$_i[0], itemData = _Object$entries$_i[1];
@@ -347,26 +342,26 @@ function _migrateFromLocalStorage() {
           i = 0;
         case 13:
           if (!(i < oldPhotos.length)) {
-            _context16.n = 19;
+            _context17.n = 19;
             break;
           }
           ph = oldPhotos[i];
           base64 = typeof ph === 'string' ? ph : ph === null || ph === void 0 ? void 0 : ph.data;
           if (!(!base64 || !base64.startsWith('data:'))) {
-            _context16.n = 14;
+            _context17.n = 14;
             break;
           }
-          return _context16.a(3, 18);
+          return _context17.a(3, 18);
         case 14:
-          _context16.p = 14;
-          _context16.n = 15;
+          _context17.p = 14;
+          _context17.n = 15;
           return fetch(base64).then(function (r) {
             return r.blob();
           });
         case 15:
-          blob = _context16.v;
+          blob = _context17.v;
           photoId = gid();
-          _context16.n = 16;
+          _context17.n = 16;
           return dbPut('photos', {
             photoId: photoId,
             inspectionId: ins.id,
@@ -386,14 +381,14 @@ function _migrateFromLocalStorage() {
             saveStatus: 'ok',
             savedToDevice: false
           });
-          _context16.n = 18;
+          _context17.n = 18;
           break;
         case 17:
-          _context16.p = 17;
-          _t13 = _context16.v;
+          _context17.p = 17;
+          _t14 = _context17.v;
         case 18:
           i++;
-          _context16.n = 13;
+          _context17.n = 13;
           break;
         case 19:
           migratedItems[itemId] = _objectSpread(_objectSpread({}, itemData), {}, {
@@ -401,45 +396,45 @@ function _migrateFromLocalStorage() {
           });
         case 20:
           _i2++;
-          _context16.n = 12;
+          _context17.n = 12;
           break;
         case 21:
-          _context16.n = 22;
+          _context17.n = 22;
           return dbPut('inspections', _objectSpread(_objectSpread({}, ins), {}, {
             items: migratedItems,
             _migrated: true
           }));
         case 22:
           migrated++;
-          _context16.n = 24;
+          _context17.n = 24;
           break;
         case 23:
-          _context16.p = 23;
-          _t14 = _context16.v;
-          console.warn('Migration error for inspection:', ins.id, _t14);
+          _context17.p = 23;
+          _t15 = _context17.v;
+          console.warn('Migration error for inspection:', ins.id, _t15);
         case 24:
-          _context16.n = 10;
+          _context17.n = 10;
           break;
         case 25:
-          _context16.n = 27;
+          _context17.n = 27;
           break;
         case 26:
-          _context16.p = 26;
-          _t15 = _context16.v;
-          _iterator2.e(_t15);
+          _context17.p = 26;
+          _t16 = _context17.v;
+          _iterator2.e(_t16);
         case 27:
-          _context16.p = 27;
+          _context17.p = 27;
           _iterator2.f();
-          return _context16.f(27);
+          return _context17.f(27);
         case 28:
           // Remove old LS data
           LS_KEYS.forEach(function (k) {
             return localStorage.removeItem(k);
           });
           console.log("[Migration] Migrated ".concat(migrated, " inspections from LocalStorage"));
-          return _context16.a(2, migrated);
+          return _context17.a(2, migrated);
       }
-    }, _callee16, null, [[14, 17], [11, 23], [9, 26, 27, 28], [5, 6]]);
+    }, _callee17, null, [[14, 17], [11, 23], [9, 26, 27, 28], [5, 6]]);
   }));
   return _migrateFromLocalStorage.apply(this, arguments);
 }
@@ -447,44 +442,44 @@ function compressImage(_x9) {
   return _compressImage.apply(this, arguments);
 }
 function _compressImage() {
-  _compressImage = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee17(file) {
+  _compressImage = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee18(file) {
     var maxEdge,
       quality,
       bitmap,
       scale,
       canvas,
-      _args17 = arguments,
-      _t16;
-    return _regenerator().w(function (_context17) {
-      while (1) switch (_context17.p = _context17.n) {
+      _args18 = arguments,
+      _t17;
+    return _regenerator().w(function (_context18) {
+      while (1) switch (_context18.p = _context18.n) {
         case 0:
-          maxEdge = _args17.length > 1 && _args17[1] !== undefined ? _args17[1] : 1600;
-          quality = _args17.length > 2 && _args17[2] !== undefined ? _args17[2] : 0.75;
-          _context17.p = 1;
-          _context17.n = 2;
+          maxEdge = _args18.length > 1 && _args18[1] !== undefined ? _args18[1] : 1600;
+          quality = _args18.length > 2 && _args18[2] !== undefined ? _args18[2] : 0.75;
+          _context18.p = 1;
+          _context18.n = 2;
           return createImageBitmap(file);
         case 2:
-          bitmap = _context17.v;
+          bitmap = _context18.v;
           scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height));
           canvas = document.createElement('canvas');
           canvas.width = Math.round(bitmap.width * scale);
           canvas.height = Math.round(bitmap.height * scale);
           canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-          _context17.n = 3;
+          _context18.n = 3;
           return new Promise(function (resolve, reject) {
             return canvas.toBlob(function (b) {
               return b ? resolve(b) : reject(new Error('toBlob returned null'));
             }, 'image/jpeg', quality);
           });
         case 3:
-          return _context17.a(2, _context17.v);
+          return _context18.a(2, _context18.v);
         case 4:
-          _context17.p = 4;
-          _t16 = _context17.v;
-          console.warn('[Compress] Falling back to original:', _t16);
-          return _context17.a(2, file.slice());
+          _context18.p = 4;
+          _t17 = _context18.v;
+          console.warn('[Compress] Falling back to original:', _t17);
+          return _context18.a(2, file.slice());
       }
-    }, _callee17, null, [[1, 4]]);
+    }, _callee18, null, [[1, 4]]);
   }));
   return _compressImage.apply(this, arguments);
 }
@@ -517,39 +512,39 @@ function checkStorageQuota() {
   return _checkStorageQuota.apply(this, arguments);
 } // ─── CONSTANTS ───────────────────────────────────────────────
 function _checkStorageQuota() {
-  _checkStorageQuota = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee18() {
+  _checkStorageQuota = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee19() {
     var _navigator$storage;
-    var _navigator$storage$pe, _navigator$storage2, _yield$navigator$stor, usage, quota, _t17;
-    return _regenerator().w(function (_context18) {
-      while (1) switch (_context18.p = _context18.n) {
+    var _navigator$storage$pe, _navigator$storage2, _yield$navigator$stor, usage, quota, _t18;
+    return _regenerator().w(function (_context19) {
+      while (1) switch (_context19.p = _context19.n) {
         case 0:
           if ((_navigator$storage = navigator.storage) !== null && _navigator$storage !== void 0 && _navigator$storage.estimate) {
-            _context18.n = 1;
+            _context19.n = 1;
             break;
           }
-          return _context18.a(2, null);
+          return _context19.a(2, null);
         case 1:
-          _context18.p = 1;
-          _context18.n = 2;
+          _context19.p = 1;
+          _context19.n = 2;
           return navigator.storage.estimate();
         case 2:
-          _yield$navigator$stor = _context18.v;
+          _yield$navigator$stor = _context19.v;
           usage = _yield$navigator$stor.usage;
           quota = _yield$navigator$stor.quota;
-          _context18.n = 3;
+          _context19.n = 3;
           return (_navigator$storage$pe = (_navigator$storage2 = navigator.storage).persist) === null || _navigator$storage$pe === void 0 ? void 0 : _navigator$storage$pe.call(_navigator$storage2);
         case 3:
-          return _context18.a(2, {
+          return _context19.a(2, {
             usage: usage,
             quota: quota,
             pct: quota ? Math.round(usage / quota * 100) : 0
           });
         case 4:
-          _context18.p = 4;
-          _t17 = _context18.v;
-          return _context18.a(2, null);
+          _context19.p = 4;
+          _t18 = _context19.v;
+          return _context19.a(2, null);
       }
-    }, _callee18, null, [[1, 4]]);
+    }, _callee19, null, [[1, 4]]);
   }));
   return _checkStorageQuota.apply(this, arguments);
 }
@@ -1462,6 +1457,7 @@ function App() {
     validationErrors = _useState32[0],
     setValidationErrors = _useState32[1];
   var fileRef = useRef();
+  var importRef = useRef();
   var pendingPhotoItem = useRef(null);
 
   // ── Init: open DB, migrate, load ────────────────────────────
@@ -2045,7 +2041,7 @@ function App() {
   }
   function genExecSummary() {
     return _genExecSummary.apply(this, arguments);
-  } // ── Generate Word Document ──────────────────────────────────
+  } // ── Export / Import JSON ────────────────────────────────────
   function _genExecSummary() {
     _genExecSummary = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee10() {
       var sig, _data$content2, res, data, _t10;
@@ -2105,26 +2101,123 @@ function App() {
     }));
     return _genExecSummary.apply(this, arguments);
   }
+  function exportJSON() {
+    if (!cur) return;
+    var exportData = {
+      wwwExportVersion: "1.0",
+      exportedAt: new Date().toISOString(),
+      exportedFrom: /Mobi|Android/i.test(navigator.userAgent) ? 'mobile' : 'desktop',
+      inspection: _objectSpread(_objectSpread({}, cur), {}, {
+        items: Object.fromEntries(Object.entries(cur.items).map(function (_ref0) {
+          var _ref1 = _slicedToArray(_ref0, 2),
+            id = _ref1[0],
+            item = _ref1[1];
+          return [id, _objectSpread(_objectSpread({}, item), {}, {
+            // Keep photo refs (label, num, caption) but mark as needing re-attachment
+            photos: (item.photos || []).map(function (p) {
+              return {
+                photoId: p.photoId,
+                num: p.num,
+                photoLabel: p.photoLabel,
+                caption: p.caption || '',
+                _needsReattach: true,
+                saveStatus: 'missing'
+              };
+            })
+          })];
+        }))
+      })
+    };
+    var blob = new Blob([JSON.stringify(exportData, null, 2)], {
+      type: 'application/json'
+    });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = "".concat(cur.fileNo, "_").concat(new Date().toISOString().slice(0, 10), ".json");
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function () {
+      return URL.revokeObjectURL(url);
+    }, 2000);
+    showToast('✅ JSON exported — re-attach photos on other device');
+  }
+  function importJSON(_x21) {
+    return _importJSON.apply(this, arguments);
+  } // ── Generate Word Document ──────────────────────────────────
+  function _importJSON() {
+    _importJSON = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee11(file) {
+      var _imported$insp, text, data, imported, photoCount, _t11;
+      return _regenerator().w(function (_context11) {
+        while (1) switch (_context11.p = _context11.n) {
+          case 0:
+            _context11.p = 0;
+            _context11.n = 1;
+            return file.text();
+          case 1:
+            text = _context11.v;
+            data = JSON.parse(text);
+            if (!(!data.wwwExportVersion || !data.inspection)) {
+              _context11.n = 2;
+              break;
+            }
+            showToast('Invalid export file', 'error');
+            return _context11.a(2);
+          case 2:
+            imported = _objectSpread(_objectSpread({}, data.inspection), {}, {
+              _importedAt: new Date().toISOString(),
+              _importedFrom: data.exportedFrom
+            });
+            _context11.n = 3;
+            return dbPut('inspections', imported);
+          case 3:
+            setList(function (prev) {
+              var i = prev.findIndex(function (x) {
+                return x.id === imported.id;
+              });
+              var n = _toConsumableArray(prev);
+              i >= 0 ? n[i] = imported : n.unshift(imported);
+              return n;
+            });
+            photoCount = Object.values(imported.items || {}).reduce(function (acc, d) {
+              var _d$photos3;
+              return acc + (((_d$photos3 = d.photos) === null || _d$photos3 === void 0 ? void 0 : _d$photos3.length) || 0);
+            }, 0);
+            showToast("\u2705 Imported: ".concat(((_imported$insp = imported.insp) === null || _imported$insp === void 0 ? void 0 : _imported$insp.address) || 'No address').concat(photoCount > 0 ? " \u2014 ".concat(photoCount, " photo(s) need re-attaching") : ''));
+            _context11.n = 5;
+            break;
+          case 4:
+            _context11.p = 4;
+            _t11 = _context11.v;
+            showToast('Import failed: ' + _t11.message, 'error');
+          case 5:
+            return _context11.a(2);
+        }
+      }, _callee11, null, [[0, 4]]);
+    }));
+    return _importJSON.apply(this, arguments);
+  }
   function generateWord() {
     return _generateWord.apply(this, arguments);
   } // ── Counts ──────────────────────────────────────────────────
   function _generateWord() {
-    _generateWord = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee11() {
-      var docxLib, Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, AlignmentType, BorderStyle, WidthType, ShadingType, PageBreak, TEAL, LTEAL, BTEAL, RED, LRED, ORANGE, LORANGE, YELLOW, LYELLOW, GRAY, LGRAY, BLACK, gradeColors, bLine, allB, noB, r, rb, h1P, h2P, p, gap, pb, infoTbl, defectBlock, flagged, sigDef, maintDef, detDef, allReadings, ctrlVal, mCls, ch, keyDefs, wtCol, wtBg, filledWTF, doc, blob, url, a, _t11;
-      return _regenerator().w(function (_context11) {
-        while (1) switch (_context11.p = _context11.n) {
+    _generateWord = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee12() {
+      var docxLib, Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, AlignmentType, BorderStyle, WidthType, ShadingType, PageBreak, TEAL, LTEAL, BTEAL, RED, LRED, ORANGE, LORANGE, YELLOW, LYELLOW, GRAY, LGRAY, BLACK, gradeColors, bLine, allB, noB, r, rb, h1P, h2P, p, gap, pb, infoTbl, defectBlock, flagged, sigDef, maintDef, detDef, allReadings, ctrlVal, mCls, ch, keyDefs, wtCol, wtBg, filledWTF, doc, blob, url, a, _t12;
+      return _regenerator().w(function (_context12) {
+        while (1) switch (_context12.p = _context12.n) {
           case 0:
             docxLib = window.docx;
             if (docxLib) {
-              _context11.n = 1;
+              _context12.n = 1;
               break;
             }
             showToast('Word library loading — please refresh', 'error');
-            return _context11.a(2);
+            return _context12.a(2);
           case 1:
             setWordGenerating(true);
             showToast('⏳ Generating Word document…');
-            _context11.p = 2;
+            _context12.p = 2;
             Document = docxLib.Document, Packer = docxLib.Packer, Paragraph = docxLib.Paragraph, TextRun = docxLib.TextRun, Table = docxLib.Table, TableRow = docxLib.TableRow, TableCell = docxLib.TableCell, AlignmentType = docxLib.AlignmentType, BorderStyle = docxLib.BorderStyle, WidthType = docxLib.WidthType, ShadingType = docxLib.ShadingType, PageBreak = docxLib.PageBreak; // ── Color palette ──
             TEAL = "0A7C6B", LTEAL = "E8F5F3", BTEAL = "00BCD4";
             RED = "C62828", LRED = "FFEBEE";
@@ -2261,10 +2354,10 @@ function App() {
                   type: WidthType.DXA
                 },
                 columnWidths: [2800, 6226],
-                rows: rows.map(function (_ref29, i) {
-                  var _ref30 = _slicedToArray(_ref29, 2),
-                    lbl = _ref30[0],
-                    val = _ref30[1];
+                rows: rows.map(function (_ref31, i) {
+                  var _ref32 = _slicedToArray(_ref31, 2),
+                    lbl = _ref32[0],
+                    val = _ref32[1];
                   return new TableRow({
                     children: [new TableCell({
                       width: {
@@ -2477,11 +2570,11 @@ function App() {
                 })]
               });
             }; // ── Build flagged list ──
-            flagged = flaggedItems.map(function (_ref31) {
+            flagged = flaggedItems.map(function (_ref33) {
               var _catObj$label;
-              var _ref32 = _slicedToArray(_ref31, 2),
-                itemId = _ref32[0],
-                d = _ref32[1];
+              var _ref34 = _slicedToArray(_ref33, 2),
+                itemId = _ref34[0],
+                d = _ref34[1];
               var catObj = CATS.find(function (c) {
                 return c.items.find(function (i) {
                   return i.id === itemId;
@@ -2614,12 +2707,12 @@ function App() {
               },
               columnWidths: [3008, 3009, 3009],
               rows: [new TableRow({
-                children: keyDefs.map(function (_ref33) {
-                  var _ref34 = _slicedToArray(_ref33, 4),
-                    lbl = _ref34[0],
-                    col = _ref34[1],
-                    bg = _ref34[2],
-                    desc = _ref34[3];
+                children: keyDefs.map(function (_ref35) {
+                  var _ref36 = _slicedToArray(_ref35, 4),
+                    lbl = _ref36[0],
+                    col = _ref36[1],
+                    bg = _ref36[2],
+                    desc = _ref36[3];
                   return new TableCell({
                     borders: _objectSpread(_objectSpread({}, noB()), {}, {
                       left: {
@@ -3192,10 +3285,10 @@ function App() {
                 children: ch
               }]
             });
-            _context11.n = 3;
+            _context12.n = 3;
             return Packer.toBlob(doc);
           case 3:
-            blob = _context11.v;
+            blob = _context12.v;
             url = URL.createObjectURL(blob);
             a = document.createElement('a');
             a.href = url;
@@ -3207,37 +3300,37 @@ function App() {
               return URL.revokeObjectURL(url);
             }, 2000);
             showToast('📄 Word document saved to Downloads ✓');
-            _context11.n = 5;
+            _context12.n = 5;
             break;
           case 4:
-            _context11.p = 4;
-            _t11 = _context11.v;
-            console.error('Word generation error:', _t11);
-            showToast('Word error: ' + _t11.message, 'error');
+            _context12.p = 4;
+            _t12 = _context12.v;
+            console.error('Word generation error:', _t12);
+            showToast('Word error: ' + _t12.message, 'error');
           case 5:
             setWordGenerating(false);
           case 6:
-            return _context11.a(2);
+            return _context12.a(2);
         }
-      }, _callee11, null, [[2, 4]]);
+      }, _callee12, null, [[2, 4]]);
     }));
     return _generateWord.apply(this, arguments);
   }
   var prog = cur ? calcPct(cur) : 0;
-  var flaggedItems = cur ? Object.entries(cur.items).filter(function (_ref0) {
-    var _ref1 = _slicedToArray(_ref0, 2),
-      d = _ref1[1];
+  var flaggedItems = cur ? Object.entries(cur.items).filter(function (_ref10) {
+    var _ref11 = _slicedToArray(_ref10, 2),
+      d = _ref11[1];
     return d.flagged;
   }) : [];
   var flagN = flaggedItems.length;
-  var sigN = flaggedItems.filter(function (_ref10) {
-    var _ref11 = _slicedToArray(_ref10, 2),
-      d = _ref11[1];
-    return d.grade === 'significant';
-  }).length;
-  var incompleteN = flaggedItems.filter(function (_ref12) {
+  var sigN = flaggedItems.filter(function (_ref12) {
     var _ref13 = _slicedToArray(_ref12, 2),
       d = _ref13[1];
+    return d.grade === 'significant';
+  }).length;
+  var incompleteN = flaggedItems.filter(function (_ref14) {
+    var _ref15 = _slicedToArray(_ref14, 2),
+      d = _ref15[1];
     return !isFlagComplete(d);
   }).length;
   var doneN = cur ? CATS.filter(function (c) {
@@ -3246,10 +3339,10 @@ function App() {
   }).length : 0;
 
   // ── Shared layout ────────────────────────────────────────────
-  var Layout = function Layout(_ref14) {
+  var Layout = function Layout(_ref16) {
     var _cur$insp, _cur$wt;
-    var title = _ref14.title,
-      children = _ref14.children;
+    var title = _ref16.title,
+      children = _ref16.children;
     return /*#__PURE__*/React.createElement("div", {
       style: {
         maxWidth: 480,
@@ -3400,11 +3493,11 @@ function App() {
         display: 'flex',
         zIndex: 100
       }
-    }, [['info', '📋', 'Details'], ['checklist', '✅', 'Checklist'], ['summary', '📊', 'Summary']].map(function (_ref15) {
-      var _ref16 = _slicedToArray(_ref15, 3),
-        p = _ref16[0],
-        icon = _ref16[1],
-        lb = _ref16[2];
+    }, [['info', '📋', 'Details'], ['checklist', '✅', 'Checklist'], ['summary', '📊', 'Summary']].map(function (_ref17) {
+      var _ref18 = _slicedToArray(_ref17, 3),
+        p = _ref18[0],
+        icon = _ref18[1],
+        lb = _ref18[2];
       return /*#__PURE__*/React.createElement("button", {
         key: p,
         onClick: function onClick() {
@@ -3648,9 +3741,40 @@ function App() {
       padding: 18,
       fontSize: 16,
       borderRadius: 12,
-      marginBottom: 14
+      marginBottom: 10
     }
-  }, "\uD83C\uDFE0  New Inspection"), list.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  }, "\uD83C\uDFE0  New Inspection"), /*#__PURE__*/React.createElement("button", {
+    onClick: function onClick() {
+      return importRef.current.click();
+    },
+    style: {
+      width: '100%',
+      background: C.white,
+      color: C.teal,
+      border: "1.5px solid ".concat(C.teal),
+      borderRadius: 10,
+      padding: '11px 20px',
+      fontSize: 14,
+      fontWeight: 600,
+      cursor: 'pointer',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      marginBottom: 20
+    }
+  }, "\uD83D\uDCE5 Import Inspection (JSON)"), /*#__PURE__*/React.createElement("input", {
+    ref: importRef,
+    type: "file",
+    accept: ".json,application/json",
+    style: {
+      display: 'none'
+    },
+    onChange: function onChange(e) {
+      if (e.target.files[0]) importJSON(e.target.files[0]);
+      e.target.value = '';
+    }
+  }), list.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: 'monospace',
       fontSize: 11,
@@ -3742,7 +3866,25 @@ function App() {
         color: C.txt2,
         fontWeight: 600
       }
-    }, p, "%")));
+    }, p, "%"), /*#__PURE__*/React.createElement("button", {
+      onClick: function onClick(e) {
+        e.stopPropagation();
+        setCur(ins);
+        setTimeout(function () {
+          return exportJSON();
+        }, 50);
+      },
+      style: {
+        fontSize: 10,
+        padding: '3px 8px',
+        borderRadius: 6,
+        border: "1px solid ".concat(C.teal),
+        background: C.white,
+        color: C.teal,
+        cursor: 'pointer',
+        fontWeight: 600
+      }
+    }, "\uD83D\uDCE4 Export")));
   })), list.length === 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: 'center',
@@ -3782,11 +3924,11 @@ function App() {
       gap: 8,
       marginBottom: 14
     }
-  }, [["".concat(prog, "%"), 'Complete', C.primary], [flagN, 'Defects', flagN > 0 ? C.danger : C.done], [sigN, 'Significant', sigN > 0 ? '#C62828' : C.txt2], ["".concat(doneN, "/").concat(CATS.length), 'Sections', C.teal]].map(function (_ref17) {
-    var _ref18 = _slicedToArray(_ref17, 3),
-      v = _ref18[0],
-      l = _ref18[1],
-      cl = _ref18[2];
+  }, [["".concat(prog, "%"), 'Complete', C.primary], [flagN, 'Defects', flagN > 0 ? C.danger : C.done], [sigN, 'Significant', sigN > 0 ? '#C62828' : C.txt2], ["".concat(doneN, "/").concat(CATS.length), 'Sections', C.teal]].map(function (_ref19) {
+    var _ref20 = _slicedToArray(_ref19, 3),
+      v = _ref20[0],
+      l = _ref20[1],
+      cl = _ref20[2];
     return /*#__PURE__*/React.createElement("div", {
       key: l,
       style: {
@@ -3846,25 +3988,27 @@ function App() {
       outline: 'none',
       width: '60%'
     },
-    value: cur.fileNo,
-    onChange: function onChange(e) {
+    defaultValue: cur.fileNo || '',
+    onBlur: function onBlur(e) {
       return saveInspection(_objectSpread(_objectSpread({}, cur), {}, {
         fileNo: e.target.value
       }));
     }
-  }))), /*#__PURE__*/React.createElement(Card, null, /*#__PURE__*/React.createElement(SecTitle, null, "Client Information"), [['name', 'Client Name', true], ['phone', 'Phone'], ['email', 'Email'], ['address', 'Client Address']].map(function (_ref19) {
-    var _ref20 = _slicedToArray(_ref19, 3),
-      k = _ref20[0],
-      lb = _ref20[1],
-      req = _ref20[2];
+  }))), /*#__PURE__*/React.createElement(Card, {
+    key: "client-".concat(cur.id)
+  }, /*#__PURE__*/React.createElement(SecTitle, null, "Client Information"), [['name', 'Client Name', true], ['phone', 'Phone'], ['email', 'Email'], ['address', 'Client Address']].map(function (_ref21) {
+    var _ref22 = _slicedToArray(_ref21, 3),
+      k = _ref22[0],
+      lb = _ref22[1],
+      req = _ref22[2];
     return /*#__PURE__*/React.createElement(FRow, {
       key: k,
       label: lb,
       required: req
     }, /*#__PURE__*/React.createElement("input", {
       style: inp,
-      value: cur.client[k] || '',
-      onChange: function onChange(e) {
+      defaultValue: cur.client[k] || '',
+      onBlur: function onBlur(e) {
         return updF('client', k, e.target.value);
       }
     }));
@@ -3892,13 +4036,15 @@ function App() {
     return /*#__PURE__*/React.createElement("option", {
       key: o
     }, o);
-  }))))), /*#__PURE__*/React.createElement(Card, null, /*#__PURE__*/React.createElement(SecTitle, null, "Inspection Information"), /*#__PURE__*/React.createElement(FRow, {
+  }))))), /*#__PURE__*/React.createElement(Card, {
+    key: "insp-".concat(cur.id)
+  }, /*#__PURE__*/React.createElement(SecTitle, null, "Inspection Information"), /*#__PURE__*/React.createElement(FRow, {
     label: "Property Address",
     required: true
   }, /*#__PURE__*/React.createElement("input", {
     style: inp,
-    value: cur.insp.address,
-    onChange: function onChange(e) {
+    defaultValue: cur.insp.address || '',
+    onBlur: function onBlur(e) {
       return updF('insp', 'address', e.target.value);
     },
     placeholder: "Address and postcode"
@@ -3937,16 +4083,16 @@ function App() {
     required: true
   }, /*#__PURE__*/React.createElement("input", {
     style: inp,
-    value: cur.insp.inspector,
-    onChange: function onChange(e) {
+    defaultValue: cur.insp.inspector || '',
+    onBlur: function onBlur(e) {
       return updF('insp', 'inspector', e.target.value);
     }
   })), /*#__PURE__*/React.createElement(FRow, {
     label: "Qualifications"
   }, /*#__PURE__*/React.createElement("input", {
     style: inp,
-    value: cur.insp.qualifications,
-    onChange: function onChange(e) {
+    defaultValue: cur.insp.qualifications || '',
+    onBlur: function onBlur(e) {
       return updF('insp', 'qualifications', e.target.value);
     }
   })), /*#__PURE__*/React.createElement(FRow2, null, /*#__PURE__*/React.createElement(FRow, {
@@ -3995,8 +4141,8 @@ function App() {
     label: "People Present"
   }, /*#__PURE__*/React.createElement("input", {
     style: inp,
-    value: cur.insp.people,
-    onChange: function onChange(e) {
+    defaultValue: cur.insp.people || '',
+    onBlur: function onBlur(e) {
       return updF('insp', 'people', e.target.value);
     },
     placeholder: "e.g. Ruby Kim (Home owner)"
@@ -4007,8 +4153,8 @@ function App() {
       minHeight: 60,
       resize: 'none'
     }),
-    value: cur.insp.areasNotInspected,
-    onChange: function onChange(e) {
+    defaultValue: cur.insp.areasNotInspected || '',
+    onBlur: function onBlur(e) {
       return updF('insp', 'areasNotInspected', e.target.value);
     }
   }))), /*#__PURE__*/React.createElement(Card, null, /*#__PURE__*/React.createElement(SecTitle, null, "Building Characteristics"), /*#__PURE__*/React.createElement(FRow2, null, /*#__PURE__*/React.createElement(FRow, {
@@ -4016,8 +4162,8 @@ function App() {
   }, /*#__PURE__*/React.createElement("input", {
     style: inp,
     type: "number",
-    value: cur.bldg.age,
-    onChange: function onChange(e) {
+    defaultValue: cur.bldg.age || '',
+    onBlur: function onBlur(e) {
       return updF('bldg', 'age', e.target.value);
     },
     placeholder: "e.g. 25"
@@ -4037,8 +4183,8 @@ function App() {
     label: "Building Type"
   }, /*#__PURE__*/React.createElement("input", {
     style: inp,
-    value: cur.bldg.type,
-    onChange: function onChange(e) {
+    defaultValue: cur.bldg.type || '',
+    onBlur: function onBlur(e) {
       return updF('bldg', 'type', e.target.value);
     }
   })), /*#__PURE__*/React.createElement(FRow2, null, /*#__PURE__*/React.createElement(FRow, {
@@ -4160,8 +4306,8 @@ function App() {
       minHeight: 54,
       resize: 'none'
     }),
-    value: cur.bldg.alterations,
-    onChange: function onChange(e) {
+    defaultValue: cur.bldg.alterations || '',
+    onBlur: function onBlur(e) {
       return updF('bldg', 'alterations', e.target.value);
     },
     placeholder: "Note any recent work\u2026"
@@ -4245,8 +4391,8 @@ function App() {
       minHeight: 80,
       resize: 'none'
     }),
-    value: cur.wt.context,
-    onChange: function onChange(e) {
+    defaultValue: cur.wt.context || '',
+    onBlur: function onBlur(e) {
       return updF('wt', 'context', e.target.value);
     },
     placeholder: "Describe weathertightness risk factors observed\u2026"
@@ -4320,7 +4466,25 @@ function App() {
     onClick: function onClick() {
       return setPage('summary');
     }
-  }, "View Summary & Report"), /*#__PURE__*/React.createElement("div", {
+  }, "View Summary & Report"), /*#__PURE__*/React.createElement("button", {
+    onClick: exportJSON,
+    style: {
+      width: '100%',
+      background: C.white,
+      color: C.teal,
+      border: "1.5px solid ".concat(C.teal),
+      borderRadius: 10,
+      padding: '11px 20px',
+      fontSize: 14,
+      fontWeight: 600,
+      cursor: 'pointer',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      marginTop: 8
+    }
+  }, "\uD83D\uDCE4 Export as JSON (for other device)"), /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 12,
       textAlign: 'center'
@@ -4637,7 +4801,7 @@ function App() {
             accentColor: C.txt2
           },
           onChange: (/*#__PURE__*/function () {
-            var _ref21 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee2(e) {
+            var _ref23 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee2(e) {
               var _d$recommendation;
               var axes, patch;
               return _regenerator().w(function (_context2) {
@@ -4659,8 +4823,8 @@ function App() {
                 }
               }, _callee2);
             }));
-            return function (_x21) {
-              return _ref21.apply(this, arguments);
+            return function (_x22) {
+              return _ref23.apply(this, arguments);
             };
           }())
         }), ax.label);
@@ -4846,11 +5010,11 @@ function App() {
         gap: 8,
         marginBottom: 14
       }
-    }, [["".concat(prog, "%"), 'Progress', C.primary], [flagN, 'Flagged', flagN > 0 ? C.danger : C.done], [sigN, 'Significant', sigN > 0 ? '#C62828' : C.txt2], [incompleteN, 'Incomplete', incompleteN > 0 ? C.amber : C.txt2]].map(function (_ref22) {
-      var _ref23 = _slicedToArray(_ref22, 3),
-        v = _ref23[0],
-        l = _ref23[1],
-        cl = _ref23[2];
+    }, [["".concat(prog, "%"), 'Progress', C.primary], [flagN, 'Flagged', flagN > 0 ? C.danger : C.done], [sigN, 'Significant', sigN > 0 ? '#C62828' : C.txt2], [incompleteN, 'Incomplete', incompleteN > 0 ? C.amber : C.txt2]].map(function (_ref24) {
+      var _ref25 = _slicedToArray(_ref24, 3),
+        v = _ref25[0],
+        l = _ref25[1],
+        cl = _ref25[2];
       return /*#__PURE__*/React.createElement("div", {
         key: l,
         style: {
@@ -4952,9 +5116,9 @@ function App() {
         color: cur.wt.rating === 'HIGH' ? '#C62828' : cur.wt.rating === 'MEDIUM' ? '#EF6C00' : C.done
       }
     }, cur.wt.rating, " RISK PROFILE")))), GRADES.map(function (g) {
-      var items = flaggedItems.filter(function (_ref24) {
-        var _ref25 = _slicedToArray(_ref24, 2),
-          d = _ref25[1];
+      var items = flaggedItems.filter(function (_ref26) {
+        var _ref27 = _slicedToArray(_ref26, 2),
+          d = _ref27[1];
         return d.grade === g.id;
       });
       if (!items.length) return null;
@@ -4965,10 +5129,10 @@ function App() {
         }
       }, /*#__PURE__*/React.createElement(SecTitle, {
         color: g.color
-      }, g.id === 'significant' ? '🔴' : g.id === 'maintenance' ? '🟠' : '🟡', " ", g.label, " (", items.length, ")"), items.map(function (_ref26) {
-        var _ref27 = _slicedToArray(_ref26, 2),
-          itemId = _ref27[0],
-          d = _ref27[1];
+      }, g.id === 'significant' ? '🔴' : g.id === 'maintenance' ? '🟠' : '🟡', " ", g.label, " (", items.length, ")"), items.map(function (_ref28) {
+        var _ref29 = _slicedToArray(_ref28, 2),
+          itemId = _ref29[0],
+          d = _ref29[1];
         var catObj = CATS.find(function (c) {
           return c.items.find(function (i) {
             return i.id === itemId;
@@ -5412,7 +5576,7 @@ function App() {
       placeholder: "Caption (required for report)",
       value: (photoRef === null || photoRef === void 0 ? void 0 : photoRef.caption) || '',
       onChange: (/*#__PURE__*/function () {
-        var _ref28 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee3(e) {
+        var _ref30 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee3(e) {
           var photos;
           return _regenerator().w(function (_context3) {
             while (1) switch (_context3.n) {
@@ -5430,8 +5594,8 @@ function App() {
             }
           }, _callee3);
         }));
-        return function (_x22) {
-          return _ref28.apply(this, arguments);
+        return function (_x23) {
+          return _ref30.apply(this, arguments);
         };
       }())
     }), /*#__PURE__*/React.createElement("button", {
@@ -5453,7 +5617,6 @@ function App() {
   return null;
 }
   </script>
-
   <script>
     document.getElementById('status').textContent = 'Starting…';
     try {
