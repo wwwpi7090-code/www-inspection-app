@@ -284,7 +284,7 @@ async function checkStorageQuota() {
 }
 
 // ─── CONSTANTS ───────────────────────────────────────────────
-const APP_VERSION = 'v3.3';
+const APP_VERSION = 'v3.4';
 const APP_DATE = '2026-09-02'; // Update this on each release
 const APP_VER_DISPLAY = `${APP_VERSION} · ${APP_DATE}`;
 const ST = {
@@ -328,21 +328,10 @@ const WEATHER = ['Fine', 'Overcast', 'Raining', 'Windy', 'Hot', 'Cold'];
 const SOIL = ['Dry', 'Moist', 'Wet', 'Saturated'];
 const OCCUPANCY = ['Vacant', 'Owner Occupied', 'Tenanted', 'Under Construction'];
 // ── Dropdown lists (Items 06–09) ──────────────────────────────
-const NOT_OPTS = ['Not recorded', 'Not determined'];
-const SOURCE_OPTS = ['Observed', 'LIM', 'Consent record', 'Certificate of Title', 'Owner advised', 'Assumed', 'Not determined'];
-const CLADDING_TYPES = ['Timber weatherboard (bevel-back)', 'Timber weatherboard (rusticated)', 'Fibre cement weatherboard', 'Fibre cement linear board', 'Fibre cement sheet', 'Brick veneer', 'Concrete block', 'Monolithic — EIFS', 'Monolithic — plaster over fibre cement', 'Monolithic — stucco over concrete block', 'Profiled metal', 'Plywood sheet', 'Vertical board and batten', 'Stone veneer', 'Not recorded', 'Not determined', 'Other (specify)'];
-const CONSTRUCTION_TYPES = ['Timber frame — no cavity', 'Timber frame — with drained cavity', 'Timber frame — cavity not determined', 'Steel frame', 'Concrete block', 'Reinforced concrete', 'Brick (solid / double skin)', 'Not recorded', 'Not determined', 'Other (specify)'];
-const ROOF_TYPES = ['Longrun steel — corrugated', 'Longrun steel — trapezoidal', 'Pressed metal tile', 'Concrete tile', 'Clay tile', 'Butyl membrane', 'TPO membrane', 'EPDM membrane', 'Torch-on bitumen membrane', 'Asphalt shingle', 'Fibre cement (may contain asbestos)', 'Not recorded', 'Not determined', 'Other (specify)'];
-const FOUNDATION_TYPES = ['Timber piles', 'Concrete piles', 'Concrete perimeter footing', 'Concrete slab on ground', 'Waffle slab', 'Ribraft', 'Pole foundation', 'Basement / subfloor walls', 'Not recorded', 'Not determined', 'Other (specify)'];
-const DECADE_OPTS = ['1840s', '1850s', '1860s', '1870s', '1880s', '1890s', '1900s', '1910s', '1920s', '1930s', '1940s', '1950s', '1960s', '1970s', '1980s', '1990s', '2000s', '2010s', '2020s'];
-const AGE_BASIS_OPTS = ['Observed construction characteristics', 'Council record (LIM)', 'Building consent record', 'Certificate of Title', 'Owner / vendor advised', 'Real estate listing', 'Not determined'];
-const CONSENT_STATUS_OPTS = ['CCC issued', 'CCC not issued', 'No consent found', 'Not determined'];
-const TENURE_OPTS = ['Freehold', 'Cross-lease', 'Unit title', 'Leasehold', 'Not determined'];
 const ZONE_CLIMATE = ['Zone 1', 'Zone 2', 'Zone 3', 'Not recorded', 'Not determined'];
 const ZONE_EXPOSURE = ['Zone A', 'Zone B', 'Zone C', 'Zone D', 'Not recorded', 'Not determined'];
 const ZONE_WIND = ['Low', 'Medium', 'High', 'Very High', 'Extra High', 'Not recorded', 'Not determined'];
 const ZONE_EQ = ['Zone 1', 'Zone 2', 'Zone 3', 'Not recorded', 'Not determined'];
-const STOREYS_OPTS = ['Single', 'Two', 'Three+', 'Not determined'];
 const CURR_YEAR = new Date().getFullYear();
 const MATERIALS = ['Plaster', 'Timber', 'Aluminium', 'uPVC', 'Steel', 'Concrete', 'Brick', 'Fibre Cement', 'Glass', 'Rubber', 'Other'];
 const METERS = ['Protimeter Surveymaster', 'Tramex CME5', 'Tramex ME5', 'Flir MR160', 'Other'];
@@ -706,239 +695,118 @@ function blankItem() {
 }
 
 // ── generalInfo helpers (Items 06–12) ─────────────────────────
-function blankGIChar() {
-  return {
-    id: gid(),
-    type: '',
-    typeOther: '',
-    area: '',
-    source: ''
-  };
-}
-function blankAlt() {
-  return {
-    id: gid(),
-    year: '',
-    consentNo: '',
-    description: '',
-    consentStatus: '',
-    source: ''
-  };
-}
 function blankGeneralInfo() {
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     address: {
-      asPerTitle: '',
-      alsoKnownAs: '',
-      legalDescription: '',
-      titleRef: '',
-      territorialAuthority: 'Auckland Council',
-      limDate: ''
+      asPerTitle: ''
     },
-    tenure: {
-      type: '',
-      designation: '',
-      otherUnits: '',
-      sharedLand: '',
-      source: ''
+    // Building characteristics — free prose, matching the report document order.
+    // Each field is written as it will appear in the report.
+    bc: {
+      age: '',
+      // "Approximately 25 years old (constructed 2000)."
+      buildingType: '',
+      // "Residential two-storey detached dwelling"
+      levels: '',
+      // "Two storeys."
+      orientation: '',
+      // "The dwelling fronts the main street and is oriented generally to the north."
+      siteExposure: '',
+      // Climate / Exposure / Wind zones as prose
+      contourVegetation: '',
+      wallCladding: '',
+      constructionType: '',
+      roofCladding: '',
+      roofDesign: '',
+      foundationType: '',
+      furnished: '',
+      alterations: '',
+      // "Recent redecoration or repairs" — narrative / bulleted
+      addedFlashings: '',
+      note: ''
     },
-    age: {
-      mode: '',
-      yearBuilt: '',
-      decade: '',
-      basisOfEstimate: '',
-      source: ''
+    // Services block
+    services: {
+      water: '',
+      sewage: '',
+      gas: ''
     },
-    alterations: [],
-    characteristics: {
-      cladding: [blankGIChar()],
-      construction: [blankGIChar()],
-      roof: [blankGIChar()],
-      foundation: [blankGIChar()]
-    },
+    // Zone values kept discrete for the Site section (1.2) and the WT matrix
     zones: {
       climate: '',
-      climateSource: '',
       exposure: '',
-      exposureSource: '',
       wind: '',
-      windSource: '',
-      eq: '',
-      eqSource: ''
-    },
-    storeys: {
-      value: '',
-      source: ''
-    },
-    buildingType: {
-      value: '',
-      source: ''
+      eq: ''
     },
     scopeLimitations: ''
   };
 }
-function displayAge(gi) {
-  if (!gi?.age?.mode) return null;
-  const {
-    mode,
-    yearBuilt,
-    decade
-  } = gi.age;
-  const CY = new Date().getFullYear();
-  if (mode === 'year' && yearBuilt) {
-    const y = parseInt(yearBuilt);
-    if (!isNaN(y) && y >= 1840 && y <= CY) return `${CY - y} years`;
-    return null;
-  }
-  if (mode === 'decade' && decade) {
-    const d = parseInt(decade);
-    if (!isNaN(d)) return `approx ${CY - (d + 10)}\u2013${CY - d} years`;
-  }
-  return null;
-}
-function countAssumed(gi) {
-  if (!gi) return 0;
-  let n = 0;
-  const chk = s => {
-    if (s === 'Assumed' || s === 'Not determined') n++;
-  };
-  chk(gi.tenure?.source);
-  chk(gi.age?.source);
-  chk(gi.storeys?.source);
-  chk(gi.buildingType?.source);
-  chk(gi.zones?.climateSource);
-  chk(gi.zones?.exposureSource);
-  chk(gi.zones?.windSource);
-  chk(gi.zones?.eqSource);
-  ['cladding', 'construction', 'roof', 'foundation'].forEach(k => (gi.characteristics?.[k] || []).forEach(e => chk(e.source)));
-  return n;
-}
-function migrateToV2(ins) {
-  if (ins.generalInfo?.schemaVersion === 2) return {
+function migrateToV3(ins) {
+  const gi = ins.generalInfo || {};
+  if (gi.schemaVersion === 3) return {
     ins,
     migrated: false
   };
+  const out = blankGeneralInfo();
   const old = ins.bldg || {};
   const CY = new Date().getFullYear();
-  const gi = blankGeneralInfo();
+  out.address.asPerTitle = gi.address?.asPerTitle || ins.insp?.address || '';
 
-  // Address
-  gi.address.asPerTitle = ins.insp?.address || '';
-
-  // Storeys / building type
-  gi.storeys.value = old.storeys || '';
-  gi.storeys.source = 'Assumed';
-  gi.buildingType.value = old.type || '';
-  gi.buildingType.source = 'Assumed';
-
-  // Age
-  if (old.age) {
-    const age = parseInt(old.age);
-    gi.age.mode = !isNaN(age) ? 'year' : 'undetermined';
-    gi.age.yearBuilt = !isNaN(age) ? String(CY - age) : '';
-  } else {
-    gi.age.mode = 'undetermined';
+  // ── Age: v2 stored year/decade; v3 stores the sentence that goes in the report
+  const a = gi.age || {};
+  if (a.mode === 'year' && a.yearBuilt) {
+    out.bc.age = `Approximately ${CY - parseInt(a.yearBuilt)} years old (constructed ${a.yearBuilt}).`;
+  } else if (a.mode === 'decade' && a.decade) {
+    out.bc.age = `Constructed in the ${a.decade}.`;
+  } else if (old.age) {
+    out.bc.age = `Approximately ${old.age} years old.`;
   }
-  gi.age.basisOfEstimate = 'Not determined';
-  gi.age.source = 'Assumed';
+  out.bc.buildingType = gi.buildingType?.value || old.type || '';
+  out.bc.levels = gi.storeys?.value || old.storeys || '';
+  out.bc.furnished = old.furnished || '';
 
-  // Zones
-  gi.zones.climate = old.climateZone || '';
-  gi.zones.climateSource = 'Assumed';
-  gi.zones.exposure = old.exposureZone || '';
-  gi.zones.exposureSource = 'Assumed';
-  gi.zones.wind = old.windZone || '';
-  gi.zones.windSource = 'Assumed';
-  gi.zones.eq = old.earthquakeZone || '';
-  gi.zones.eqSource = 'Assumed';
+  // ── Characteristics: collapse v2 multi-entry arrays into a single sentence
+  const flat = arr => (arr || []).map(e => {
+    const t = e.type === 'Other (specify)' ? e.typeOther || '' : e.type || '';
+    return t && e.area ? `${t} (${e.area})` : t;
+  }).filter(Boolean).join('; ');
+  out.bc.wallCladding = flat(gi.characteristics?.cladding) || old.cladding || '';
+  out.bc.constructionType = flat(gi.characteristics?.construction) || old.construction || '';
+  out.bc.roofCladding = flat(gi.characteristics?.roof) || old.roof || '';
+  out.bc.foundationType = flat(gi.characteristics?.foundation) || old.foundation || '';
 
-  // Map helper: if value not in list, use Other
-  const mapChar = (v, list) => {
-    if (!v) return {
-      type: '',
-      typeOther: '',
-      area: '',
-      source: 'Assumed'
-    };
-    if (list.includes(v)) return {
-      type: v,
-      typeOther: '',
-      area: '',
-      source: 'Assumed'
-    };
-    return {
-      type: 'Other (specify)',
-      typeOther: v,
-      area: '',
-      source: 'Assumed'
-    };
+  // ── Zones: keep discrete values, and build the Site Exposure sentence
+  out.zones = {
+    climate: gi.zones?.climate || old.climateZone || '',
+    exposure: gi.zones?.exposure || old.exposureZone || '',
+    wind: gi.zones?.wind || old.windZone || '',
+    eq: gi.zones?.eq || old.earthquakeZone || ''
   };
+  const zp = [];
+  if (out.zones.climate) zp.push(`Climate ${out.zones.climate}`);
+  if (out.zones.exposure) zp.push(`Exposure ${out.zones.exposure}`);
+  if (out.zones.wind) zp.push(`Wind Zone ${out.zones.wind}`);
+  if (zp.length) out.bc.siteExposure = `The site is located within ${zp.join(', ')}.`;
 
-  // Cladding mapping
-  const claddingMap = {
-    'Weatherboard': 'Timber weatherboard (bevel-back)',
-    'Brick Veneer': 'Brick veneer',
-    'Harditex': 'Fibre cement sheet',
-    'Stucco': 'Monolithic — stucco over concrete block',
-    'EIFS (no cavity)': 'Monolithic — EIFS',
-    'EIFS (with cavity)': 'Monolithic — EIFS',
-    'Concrete Block': 'Concrete block'
-  };
-  const roofMap = {
-    'Corrugated Iron': 'Longrun steel — corrugated',
-    'Longrun Steel': 'Longrun steel — trapezoidal',
-    'Steel Tile': 'Pressed metal tile',
-    'Concrete Tile': 'Concrete tile',
-    'Clay Tile': 'Clay tile',
-    'Membrane': 'Butyl membrane'
-  };
-  const foundMap = {
-    'Timber Piles': 'Timber piles',
-    'Concrete Piles': 'Concrete piles',
-    'Concrete Slab': 'Concrete slab on ground',
-    'Screw Piles': 'Timber piles'
-  };
-  const constMap = {
-    'Timber Frame': 'Timber frame — cavity not determined',
-    'Masonry': 'Concrete block',
-    'Steel Frame': 'Steel frame',
-    'Concrete': 'Reinforced concrete'
-  };
-  const mapV = (v, map, list) => {
-    const mapped = map[v] || v;
-    return mapChar(mapped, list);
-  };
-  gi.characteristics.cladding = [{
-    id: gid(),
-    ...mapV(old.cladding || '', claddingMap, CLADDING_TYPES)
-  }];
-  gi.characteristics.construction = [{
-    id: gid(),
-    ...mapV(old.construction || '', constMap, CONSTRUCTION_TYPES)
-  }];
-  gi.characteristics.roof = [{
-    id: gid(),
-    ...mapV(old.roof || '', roofMap, ROOF_TYPES)
-  }];
-  gi.characteristics.foundation = [{
-    id: gid(),
-    ...mapV(old.foundation || '', foundMap, FOUNDATION_TYPES)
-  }];
-
-  // Alterations
-  if (old.alterations) {
-    gi.alterations = [{
-      ...blankAlt(),
-      id: gid(),
-      description: old.alterations
-    }];
+  // ── Alterations: v2 repeating cards → narrative bullets
+  if (Array.isArray(gi.alterations) && gi.alterations.length) {
+    out.bc.alterations = gi.alterations.map(al => {
+      const bits = [al.description];
+      if (al.year) bits.push(`(${al.year})`);
+      if (al.consentNo) bits.push(`Consent ${al.consentNo}`);
+      if (al.consentStatus) bits.push(al.consentStatus);
+      return '\u2022 ' + bits.filter(Boolean).join(' — ');
+    }).join('\n');
+  } else if (old.alterations) {
+    out.bc.alterations = old.alterations;
   }
+  out.scopeLimitations = gi.scopeLimitations || '';
   return {
     ins: {
       ...ins,
-      generalInfo: gi,
-      _migratedFromV1: true
+      generalInfo: out,
+      _migratedToV3: true
     },
     migrated: true
   };
@@ -973,21 +841,6 @@ function blankInspection() {
       occupancy: '',
       people: '',
       areasNotInspected: 'Concealed building elements, areas not accessible at time of inspection'
-    },
-    bldg: {
-      age: '',
-      type: 'Residential detached dwelling',
-      storeys: 'Two',
-      climateZone: '',
-      exposureZone: '',
-      windZone: '',
-      earthquakeZone: '',
-      cladding: '',
-      construction: 'Timber Frame',
-      roof: '',
-      foundation: '',
-      furnished: 'Yes',
-      alterations: ''
     },
     generalInfo: blankGeneralInfo(),
     wt: {
@@ -1463,7 +1316,7 @@ function App() {
           const {
             ins,
             migrated
-          } = migrateToV2(raw);
+          } = migrateToV3(raw);
           if (migrated) {
             await dbPut('inspections', ins);
             anyMigrated = true;
@@ -1761,55 +1614,6 @@ function App() {
       generalInfo: gi
     });
   }
-  function updChar(type, idx, field, value) {
-    const gi = JSON.parse(JSON.stringify(cur.generalInfo || blankGeneralInfo()));
-    gi.characteristics[type][idx][field] = value;
-    return saveInspection({
-      ...cur,
-      generalInfo: gi
-    });
-  }
-  function addChar(type) {
-    const gi = JSON.parse(JSON.stringify(cur.generalInfo || blankGeneralInfo()));
-    gi.characteristics[type].push(blankGIChar());
-    return saveInspection({
-      ...cur,
-      generalInfo: gi
-    });
-  }
-  function removeChar(type, idx) {
-    const gi = JSON.parse(JSON.stringify(cur.generalInfo || blankGeneralInfo()));
-    gi.characteristics[type].splice(idx, 1);
-    return saveInspection({
-      ...cur,
-      generalInfo: gi
-    });
-  }
-  function updAlt(idx, field, value) {
-    const gi = JSON.parse(JSON.stringify(cur.generalInfo || blankGeneralInfo()));
-    gi.alterations[idx][field] = value;
-    return saveInspection({
-      ...cur,
-      generalInfo: gi
-    });
-  }
-  function addAlt() {
-    const gi = JSON.parse(JSON.stringify(cur.generalInfo || blankGeneralInfo()));
-    gi.alterations.push(blankAlt());
-    return saveInspection({
-      ...cur,
-      generalInfo: gi
-    });
-  }
-  function removeAlt(idx) {
-    const gi = JSON.parse(JSON.stringify(cur.generalInfo || blankGeneralInfo()));
-    gi.alterations.splice(idx, 1);
-    return saveInspection({
-      ...cur,
-      generalInfo: gi
-    });
-  }
-
   // ── Export / Import JSON ────────────────────────────────────
   function exportJSON() {
     if (!cur) return;
@@ -2342,8 +2146,16 @@ function App() {
       ch.push(h2P("Client Information"));
       ch.push(infoTbl([["Client Name", cur.client.name || "—"], ["Phone", cur.client.phone || "—"], ["Email", cur.client.email || "—"], ["Report Delivery", cur.client.delivery || "—"], ["Payment Status", cur.client.payment || "—"]]));
       ch.push(gap());
+      // Building characteristics — report document order (see 3rd audit template)
+      const bc = cur.generalInfo?.bc || {};
+      const svc = cur.generalInfo?.services || {};
       ch.push(h2P("Building Characteristics"));
-      ch.push(infoTbl([["Building Type", cur.bldg.type || "—"], ["Age of Building", cur.bldg.age ? `${cur.bldg.age} years` : "—"], ["Number of Storeys", cur.bldg.storeys || "—"], ["Construction Type", cur.bldg.construction || "—"], ["Wall Cladding", cur.bldg.cladding || "—"], ["Roof Type", cur.bldg.roof || "—"], ["Foundation Type", cur.bldg.foundation || "—"], ["Climate Zone", cur.bldg.climateZone || "—"], ["Exposure Zone", cur.bldg.exposureZone || "—"], ["Wind Zone", cur.bldg.windZone || "—"], ["Earthquake Zone", cur.bldg.earthquakeZone || "—"], ["Recent Alterations", cur.bldg.alterations || "None noted"]]));
+      ch.push(infoTbl([["Age of Building", bc.age], ["Building Type", bc.buildingType], ["Levels", bc.levels], ["Orientation of Building", bc.orientation], ["Site Exposure", bc.siteExposure], ["Contour and Vegetation", bc.contourVegetation], ["Wall Cladding Type", bc.wallCladding], ["Construction Type", bc.constructionType], ["Roof Cladding", bc.roofCladding], ["Roof Design", bc.roofDesign], ["Foundation Type", bc.foundationType], ["Property Furnished", bc.furnished], ["Recent redecoration or repairs", bc.alterations], ["Recently added flashings", bc.addedFlashings], ["Note", bc.note]].filter(([, v]) => v && String(v).trim())));
+      if (svc.water || svc.sewage || svc.gas) {
+        ch.push(gap());
+        ch.push(h2P("Services"));
+        ch.push(infoTbl([["Water Source", svc.water], ["Sewage Disposal", svc.sewage], ["Gas Meter", svc.gas]].filter(([, v]) => v && String(v).trim())));
+      }
       ch.push(pb());
 
       // ══ SEVERITY & COLOUR KEY ═════════════════════════════════
@@ -3509,187 +3321,47 @@ function App() {
   // ═══ INFO (DETAILS) PAGE ══════════════════════════════════════
   if (page === 'info' && cur) {
     const gi = cur.generalInfo || blankGeneralInfo();
-    const ageDisplay = displayAge(gi);
-    const assumedCount = countAssumed(gi);
-    const AMBER_IND = '#C8A04A'; // low-saturation amber for assumed indicator
-    const isAssumed = s => s === 'Assumed' || s === 'Not determined';
-    const cardStyle = src => ({
-      background: C.white,
-      borderRadius: 12,
-      padding: 16,
-      boxShadow: '0 1px 4px rgba(0,0,0,.07)',
-      marginBottom: 10,
-      borderLeft: isAssumed(src) ? `3px solid ${AMBER_IND}` : undefined
-    });
 
-    // Source dropdown (inline compact)
-    const SrcSel = ({
-      value,
-      onChange,
-      style = {}
-    }) => /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: 6,
-        marginTop: 6,
-        ...style
-      }
-    }, /*#__PURE__*/React.createElement("label", {
-      style: {
-        fontSize: 10,
-        color: C.txt2,
-        minWidth: 46,
-        fontWeight: 700,
-        textTransform: 'uppercase',
-        letterSpacing: '.04em'
-      }
-    }, "Source"), /*#__PURE__*/React.createElement("select", {
-      style: {
-        ...inp,
-        flex: 1,
-        fontSize: 12,
-        padding: '6px 10px'
-      },
-      value: value || '',
-      onChange: onChange
-    }, /*#__PURE__*/React.createElement("option", {
-      value: ""
-    }, "Select source"), SOURCE_OPTS.map(o => /*#__PURE__*/React.createElement("option", {
-      key: o
-    }, o))), isAssumed(value) && /*#__PURE__*/React.createElement("span", {
-      style: {
-        color: AMBER_IND,
-        fontSize: 16,
-        lineHeight: 1
-      }
-    }, "⚠"));
-
-    // Char entry card (cladding / construction / roof / foundation)
-    const CharCard = ({
-      type,
-      entry,
-      idx,
-      typeList,
-      label
-    }) => /*#__PURE__*/React.createElement("div", {
-      style: {
-        background: C.bg,
-        borderRadius: 8,
-        padding: 10,
-        marginBottom: 8,
-        border: `1px solid ${isAssumed(entry.source) ? AMBER_IND : C.border}`,
-        borderLeft: isAssumed(entry.source) ? `3px solid ${AMBER_IND}` : `1px solid ${C.border}`
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 6
-      }
-    }, /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontSize: 11,
-        fontWeight: 700,
-        color: C.txt2
-      }
-    }, label, " ", idx + 1), idx > 0 && /*#__PURE__*/React.createElement("button", {
-      onClick: () => removeChar(type, idx),
-      style: {
-        fontSize: 11,
-        color: C.danger,
-        background: 'none',
-        border: 'none',
-        cursor: 'pointer'
-      }
-    }, "✕ Remove")), /*#__PURE__*/React.createElement("select", {
-      style: {
-        ...inp,
-        marginBottom: 6
-      },
-      value: entry.type || '',
-      onChange: e => updChar(type, idx, 'type', e.target.value)
-    }, /*#__PURE__*/React.createElement("option", {
-      value: ""
-    }, "Select type"), typeList.map(o => /*#__PURE__*/React.createElement("option", {
-      key: o
-    }, o))), entry.type === 'Other (specify)' && /*#__PURE__*/React.createElement("input", {
-      style: {
-        ...inp,
-        marginBottom: 6,
-        borderColor: !entry.typeOther ? C.danger : C.border
-      },
-      key: `${entry.id}-other`,
-      defaultValue: entry.typeOther || '',
-      onBlur: e => updChar(type, idx, 'typeOther', e.target.value),
-      placeholder: "Specify — required *"
-    }), /*#__PURE__*/React.createElement("input", {
-      style: {
-        ...inp,
-        marginBottom: 4,
-        fontSize: 13
-      },
-      key: `${entry.id}-area`,
-      defaultValue: entry.area || '',
-      onBlur: e => updChar(type, idx, 'area', e.target.value),
-      placeholder: "Area / location (e.g. Original dwelling, 2015 addition)"
-    }), /*#__PURE__*/React.createElement(SrcSel, {
-      value: entry.source,
-      onChange: e => updChar(type, idx, 'source', e.target.value)
-    }));
+    // Free-text field bound to generalInfo.bc.* — written as it appears in the report
+    const BCField = ({
+      label,
+      path,
+      placeholder,
+      rows = 2
+    }) => {
+      const val = path.reduce((o, k) => (o || {})[k], gi) || '';
+      return /*#__PURE__*/React.createElement(FRow, {
+        label: label
+      }, /*#__PURE__*/React.createElement("textarea", {
+        key: `${cur.id}-${path.join('.')}`,
+        style: {
+          ...inp,
+          minHeight: rows * 22 + 20,
+          resize: 'vertical',
+          fontSize: 13,
+          lineHeight: 1.5
+        },
+        defaultValue: val,
+        onBlur: e => updGI(path, e.target.value),
+        placeholder: placeholder
+      }));
+    };
     return /*#__PURE__*/React.createElement(Layout, {
       title: "General Information"
-    }, (cur._migratedFromV1 || migrationBanner) && /*#__PURE__*/React.createElement("div", {
+    }, (cur._migratedToV3 || migrationBanner) && /*#__PURE__*/React.createElement("div", {
       style: {
         background: '#FFF8EC',
-        border: `1px solid ${AMBER_IND}`,
+        border: '1px solid #C8A04A',
         borderRadius: 8,
         padding: '10px 14px',
         marginBottom: 10,
         fontSize: 12,
-        color: '#8B5E00'
+        color: '#8B5E00',
+        lineHeight: 1.5
       }
-    }, "⚠ Building characteristics from an earlier version have been marked 'Assumed'. Please review and confirm."), /*#__PURE__*/React.createElement("div", {
+    }, "⚠ Building characteristics were converted from an earlier version into report wording. Please review each entry before use."), /*#__PURE__*/React.createElement(Card, {
       style: {
-        display: 'flex',
-        gap: 8,
-        marginBottom: 14
-      }
-    }, [[`${prog}%`, 'Complete', C.primary], [flagN, 'Defects', flagN > 0 ? C.danger : C.done], [assumedCount, 'Assumed/ND', assumedCount > 0 ? AMBER_IND : C.txt2], [`${doneN}/${CATS.length}`, 'Sections', C.teal]].map(([v, l, cl]) => /*#__PURE__*/React.createElement("div", {
-      key: l,
-      style: {
-        flex: 1,
-        background: C.white,
-        borderRadius: 10,
-        padding: '9px 6px',
-        textAlign: 'center',
-        boxShadow: '0 1px 4px rgba(0,0,0,.06)'
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: 16,
-        fontWeight: 800,
-        color: cl
-      }
-    }, v), /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: 9,
-        color: C.txt2,
-        marginTop: 2,
-        fontWeight: 600,
-        textTransform: 'uppercase',
-        letterSpacing: '.04em'
-      }
-    }, l)))), /*#__PURE__*/React.createElement(Card, {
-      style: {
-        padding: '10px 14px',
-        background: '#F8FFFE',
         border: `1px solid ${C.teal}`,
-        marginBottom: 10
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center'
@@ -3697,128 +3369,42 @@ function App() {
     }, /*#__PURE__*/React.createElement("span", {
       style: {
         fontSize: 11,
-        color: C.txt2,
         fontWeight: 700,
+        color: C.txt2,
         textTransform: 'uppercase',
         letterSpacing: '.04em'
       }
-    }, "File No."), /*#__PURE__*/React.createElement("input", {
+    }, "File No."), /*#__PURE__*/React.createElement("span", {
       style: {
         fontFamily: 'monospace',
         fontSize: 15,
         fontWeight: 700,
-        color: C.teal,
-        border: 'none',
-        background: 'transparent',
-        textAlign: 'right',
-        outline: 'none',
-        width: '60%'
-      },
-      key: `fno-${cur.id}`,
-      defaultValue: cur.fileNo || '',
-      onBlur: e => saveInspection({
-        ...cur,
-        fileNo: e.target.value
-      })
-    }))), /*#__PURE__*/React.createElement(Card, {
+        color: C.teal
+      }
+    }, cur.fileNo)), /*#__PURE__*/React.createElement(Card, {
       key: `addr-${cur.id}`
-    }, /*#__PURE__*/React.createElement(SecTitle, null, "Property Address (Items 12)"), /*#__PURE__*/React.createElement(FRow, {
-      label: "Address (as per title)",
+    }, /*#__PURE__*/React.createElement(SecTitle, null, "Property Address"), /*#__PURE__*/React.createElement(FRow, {
+      label: "Address",
       required: true
     }, /*#__PURE__*/React.createElement("input", {
       style: inp,
-      defaultValue: gi.address?.asPerTitle || '',
-      onBlur: e => updGI(['address', 'asPerTitle'], e.target.value),
-      placeholder: "11 Hardley Avenue, Three Kings, Auckland 1041"
-    })), /*#__PURE__*/React.createElement(FRow, {
-      label: "Also Known As (optional)"
-    }, /*#__PURE__*/React.createElement("input", {
-      style: inp,
-      defaultValue: gi.address?.alsoKnownAs || '',
-      onBlur: e => updGI(['address', 'alsoKnownAs'], e.target.value),
-      placeholder: "e.g. Mount Roskill"
-    })), /*#__PURE__*/React.createElement(FRow, {
-      label: "Legal Description"
-    }, /*#__PURE__*/React.createElement("input", {
-      style: inp,
-      defaultValue: gi.address?.legalDescription || '',
-      onBlur: e => updGI(['address', 'legalDescription'], e.target.value),
-      placeholder: "e.g. Flat 2 DP 91284 on Lot 139 DP 16857"
-    })), /*#__PURE__*/React.createElement(FRow2, null, /*#__PURE__*/React.createElement(FRow, {
-      label: "Certificate of Title"
-    }, /*#__PURE__*/React.createElement("input", {
-      style: inp,
-      defaultValue: gi.address?.titleRef || '',
-      onBlur: e => updGI(['address', 'titleRef'], e.target.value),
-      placeholder: "e.g. CT-48B/994"
-    })), /*#__PURE__*/React.createElement(FRow, {
-      label: "Territorial Authority"
-    }, /*#__PURE__*/React.createElement("input", {
-      style: inp,
-      defaultValue: gi.address?.territorialAuthority || '',
-      onBlur: e => updGI(['address', 'territorialAuthority'], e.target.value),
-      placeholder: "Auckland Council"
-    }))), /*#__PURE__*/React.createElement(FRow, {
-      label: "LIM Date (if relied upon)"
-    }, /*#__PURE__*/React.createElement("input", {
-      style: inp,
-      defaultValue: gi.address?.limDate || '',
+      defaultValue: gi.address?.asPerTitle || cur.insp?.address || '',
       onBlur: e => {
-        updGI(['address', 'limDate'], e.target.value);
-        if (e.target.value) {
-          const limNote = `The LIM relied upon is dated ${e.target.value} and does not record any activity after that date.`;
-          const existing = gi.scopeLimitations || '';
-          if (!existing.includes('LIM relied upon')) {
-            updGI(['scopeLimitations'], existing ? existing + '\n\n' + limNote : limNote);
+        const v = e.target.value;
+        const g = JSON.parse(JSON.stringify(cur.generalInfo || blankGeneralInfo()));
+        g.address.asPerTitle = v;
+        // Single source of truth — mirror to insp.address for report/header reads
+        saveInspection({
+          ...cur,
+          generalInfo: g,
+          insp: {
+            ...cur.insp,
+            address: v
           }
-        }
+        });
       },
-      placeholder: "DD/MM/YYYY"
+      placeholder: "11 Hardley Avenue, Mount Roskill, Auckland 1041"
     }))), /*#__PURE__*/React.createElement(Card, {
-      style: cardStyle(gi.tenure?.source)
-    }, /*#__PURE__*/React.createElement(SecTitle, null, "Tenure (Item 11)"), /*#__PURE__*/React.createElement(FRow, {
-      label: "Tenure Type"
-    }, /*#__PURE__*/React.createElement("select", {
-      style: inp,
-      value: gi.tenure?.type || '',
-      onChange: e => {
-        updGI(['tenure', 'type'], e.target.value);
-        if (['Cross-lease', 'Unit title'].includes(e.target.value)) {
-          const des = gi.tenure?.designation || '[designation]';
-          const autoText = `The property is held under ${e.target.value}. This inspection was limited to ${des} and its exclusive use areas. Common areas, shared land, shared services and other units on the site were not inspected.`;
-          const existing = gi.scopeLimitations || '';
-          if (!existing.includes('held under')) updGI(['scopeLimitations'], existing ? existing + '\n\n' + autoText : autoText);
-        }
-      }
-    }, /*#__PURE__*/React.createElement("option", {
-      value: ""
-    }, "Select"), TENURE_OPTS.map(o => /*#__PURE__*/React.createElement("option", {
-      key: o
-    }, o)))), ['Cross-lease', 'Unit title'].includes(gi.tenure?.type) && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(FRow, {
-      label: "Flat / Unit Designation"
-    }, /*#__PURE__*/React.createElement("input", {
-      style: inp,
-      defaultValue: gi.tenure?.designation || '',
-      onBlur: e => updGI(['tenure', 'designation'], e.target.value),
-      placeholder: "e.g. Flat 2 DP 91284"
-    })), /*#__PURE__*/React.createElement(FRow, {
-      label: "Other Units on Site"
-    }, /*#__PURE__*/React.createElement("input", {
-      style: inp,
-      defaultValue: gi.tenure?.otherUnits || '',
-      onBlur: e => updGI(['tenure', 'otherUnits'], e.target.value),
-      placeholder: "e.g. Flat 1 DP 91284 — 19 Louvain Avenue"
-    })), /*#__PURE__*/React.createElement(FRow, {
-      label: "Shared Land"
-    }, /*#__PURE__*/React.createElement("input", {
-      style: inp,
-      defaultValue: gi.tenure?.sharedLand || '',
-      onBlur: e => updGI(['tenure', 'sharedLand'], e.target.value),
-      placeholder: "e.g. ½ share of 838m²"
-    }))), /*#__PURE__*/React.createElement(SrcSel, {
-      value: gi.tenure?.source,
-      onChange: e => updGI(['tenure', 'source'], e.target.value)
-    })), /*#__PURE__*/React.createElement(Card, {
       key: `client-${cur.id}`
     }, /*#__PURE__*/React.createElement(SecTitle, null, "Client Information"), [['name', 'Client Name', true], ['phone', 'Phone'], ['email', 'Email'], ['address', 'Client Address']].map(([k, lb, req]) => /*#__PURE__*/React.createElement(FRow, {
       key: k,
@@ -3846,15 +3432,7 @@ function App() {
       key: o
     }, o)))))), /*#__PURE__*/React.createElement(Card, {
       key: `insp-${cur.id}`
-    }, /*#__PURE__*/React.createElement(SecTitle, null, "Inspection Information"), /*#__PURE__*/React.createElement(FRow, {
-      label: "Property Address",
-      required: true
-    }, /*#__PURE__*/React.createElement("input", {
-      style: inp,
-      defaultValue: cur.insp.address,
-      onBlur: e => updF('insp', 'address', e.target.value),
-      placeholder: "Address and postcode"
-    })), /*#__PURE__*/React.createElement(FRow2, null, /*#__PURE__*/React.createElement(FRow, {
+    }, /*#__PURE__*/React.createElement(SecTitle, null, "Inspection Information"), /*#__PURE__*/React.createElement(FRow2, null, /*#__PURE__*/React.createElement(FRow, {
       label: "Date *"
     }, /*#__PURE__*/React.createElement("input", {
       style: inp,
@@ -3936,460 +3514,148 @@ function App() {
       },
       defaultValue: cur.insp.areasNotInspected,
       onBlur: e => updF('insp', 'areasNotInspected', e.target.value)
-    }))), /*#__PURE__*/React.createElement(Card, {
-      key: `age-${cur.id}`
-    }, /*#__PURE__*/React.createElement(SecTitle, null, "Age & Construction History (Item 07)"), /*#__PURE__*/React.createElement(FRow, {
-      label: "Age Mode"
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: 'flex',
-        gap: 8
-      }
-    }, [['year', 'Year Built'], ['decade', 'Decade'], ['undetermined', 'Not determined']].map(([m, lbl]) => /*#__PURE__*/React.createElement("button", {
-      key: m,
-      onClick: () => updGI(['age', 'mode'], m),
-      style: {
-        flex: 1,
-        padding: '9px 6px',
-        borderRadius: 8,
-        border: `2px solid ${gi.age?.mode === m ? C.primary : C.border}`,
-        background: gi.age?.mode === m ? '#EDE9FF' : C.white,
-        color: gi.age?.mode === m ? C.primary : C.txt2,
-        fontWeight: gi.age?.mode === m ? 700 : 400,
-        fontSize: 12,
-        cursor: 'pointer'
-      }
-    }, lbl)))), gi.age?.mode === 'year' && /*#__PURE__*/React.createElement(FRow, {
-      label: "Year Built (approx)"
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: 8
-      }
-    }, /*#__PURE__*/React.createElement("input", {
-      style: {
-        ...inp,
-        flex: 1
-      },
-      type: "number",
-      min: "1840",
-      max: CURR_YEAR,
-      defaultValue: gi.age?.yearBuilt || '',
-      onBlur: e => {
-        const v = e.target.value;
-        const y = parseInt(v);
-        if (v && (isNaN(y) || y < 1840 || y > CURR_YEAR)) {
-          showToast(`Year must be between 1840 and ${CURR_YEAR}`, 'error');
-        } else {
-          updGI(['age', 'yearBuilt'], v);
-        }
-      },
-      placeholder: "e.g. 1975"
-    }), ageDisplay && /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontSize: 12,
-        color: C.teal,
-        fontWeight: 600,
-        whiteSpace: 'nowrap'
-      }
-    }, "= ", ageDisplay)), gi.age?.yearBuilt && (parseInt(gi.age.yearBuilt) < 1840 || parseInt(gi.age.yearBuilt) > CURR_YEAR) && /*#__PURE__*/React.createElement("div", {
+    }))), /*#__PURE__*/React.createElement(Card, null, /*#__PURE__*/React.createElement(SecTitle, null, "Building Characteristics"), /*#__PURE__*/React.createElement("div", {
       style: {
         fontSize: 11,
-        color: C.danger,
-        marginTop: 4
+        color: C.txt2,
+        marginBottom: 12,
+        lineHeight: 1.5
       }
-    }, "⚠ Year must be between 1840 and ", CURR_YEAR)), gi.age?.mode === 'decade' && /*#__PURE__*/React.createElement(FRow, {
-      label: "Decade (approx)"
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: 8
-      }
-    }, /*#__PURE__*/React.createElement("select", {
-      style: {
-        ...inp,
-        flex: 1
-      },
-      value: gi.age?.decade || '',
-      onChange: e => updGI(['age', 'decade'], e.target.value)
-    }, /*#__PURE__*/React.createElement("option", {
-      value: ""
-    }, "Select decade"), DECADE_OPTS.map(o => /*#__PURE__*/React.createElement("option", {
-      key: o
-    }, o))), ageDisplay && /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontSize: 12,
-        color: C.teal,
-        fontWeight: 600,
-        whiteSpace: 'nowrap'
-      }
-    }, ageDisplay))), gi.age?.mode !== 'undetermined' && gi.age?.mode && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(FRow, {
-      label: "Basis of Estimate"
-    }, /*#__PURE__*/React.createElement("select", {
-      style: inp,
-      value: gi.age?.basisOfEstimate || '',
-      onChange: e => updGI(['age', 'basisOfEstimate'], e.target.value)
-    }, /*#__PURE__*/React.createElement("option", {
-      value: ""
-    }, "Select"), AGE_BASIS_OPTS.map(o => /*#__PURE__*/React.createElement("option", {
-      key: o
-    }, o)))), /*#__PURE__*/React.createElement(SrcSel, {
-      value: gi.age?.source,
-      onChange: e => updGI(['age', 'source'], e.target.value)
-    })), /*#__PURE__*/React.createElement("div", {
-      style: {
-        marginTop: 16
-      }
-    }, /*#__PURE__*/React.createElement(SecTitle, null, "Alterations & Additions"), (gi.alterations || []).map((alt, idx) => /*#__PURE__*/React.createElement("div", {
-      key: alt.id,
-      style: {
-        background: C.bg,
-        borderRadius: 8,
-        padding: 10,
-        marginBottom: 8,
-        border: `1px solid ${C.border}`
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: 'flex',
-        justifyContent: 'space-between',
-        marginBottom: 6
-      }
-    }, /*#__PURE__*/React.createElement("span", {
+    }, "Write each entry as it should read in the report. Where information was not established, say so (e.g. \"No information was provided regarding recently added flashings.\")."), /*#__PURE__*/React.createElement(BCField, {
+      label: "Age of Building",
+      path: ['bc', 'age'],
+      placeholder: "Approximately 25 years old (constructed 2000)."
+    }), /*#__PURE__*/React.createElement(BCField, {
+      label: "Building Type",
+      path: ['bc', 'buildingType'],
+      placeholder: "Residential two-storey detached dwelling",
+      rows: 1
+    }), /*#__PURE__*/React.createElement(BCField, {
+      label: "Levels",
+      path: ['bc', 'levels'],
+      placeholder: "Two storeys.",
+      rows: 1
+    }), /*#__PURE__*/React.createElement(BCField, {
+      label: "Orientation of Building",
+      path: ['bc', 'orientation'],
+      placeholder: "The dwelling fronts the main street and is oriented generally to the north."
+    }), /*#__PURE__*/React.createElement(BCField, {
+      label: "Site Exposure",
+      path: ['bc', 'siteExposure'],
+      placeholder: "Climate Zone 1. The site is located within an Exposure Zone C and Wind Zone Medium.",
+      rows: 3
+    }), /*#__PURE__*/React.createElement(BCField, {
+      label: "Contour and Vegetation",
+      path: ['bc', 'contourVegetation'],
+      placeholder: "The site slopes down from the northern (street) side toward the south…",
+      rows: 3
+    }), /*#__PURE__*/React.createElement(BCField, {
+      label: "Wall Cladding Type",
+      path: ['bc', 'wallCladding'],
+      placeholder: "Monolithic EIFS (Exterior Insulation and Finish System) cladding"
+    }), /*#__PURE__*/React.createElement(BCField, {
+      label: "Construction Type",
+      path: ['bc', 'constructionType'],
+      placeholder: "Timber-framed construction",
+      rows: 1
+    }), /*#__PURE__*/React.createElement(BCField, {
+      label: "Roof Cladding",
+      path: ['bc', 'roofCladding'],
+      placeholder: "Steel tile roof cladding",
+      rows: 1
+    }), /*#__PURE__*/React.createElement(BCField, {
+      label: "Roof Design",
+      path: ['bc', 'roofDesign'],
+      placeholder: "Pitched steel tile roof with guttering",
+      rows: 1
+    }), /*#__PURE__*/React.createElement(BCField, {
+      label: "Foundation Type",
+      path: ['bc', 'foundationType'],
+      placeholder: "Concrete slab and pile foundation system",
+      rows: 1
+    }), /*#__PURE__*/React.createElement(BCField, {
+      label: "Property Furnished",
+      path: ['bc', 'furnished'],
+      placeholder: "The property was furnished at the time of inspection.",
+      rows: 1
+    }), /*#__PURE__*/React.createElement(BCField, {
+      label: "Recent Redecoration or Repairs",
+      path: ['bc', 'alterations'],
+      placeholder: "One item per line, e.g.\n\u2022 Internal partition wall added at ground level (approximately 10 years ago).\n\u2022 Garage converted to storage (over 10 years ago).",
+      rows: 5
+    }), /*#__PURE__*/React.createElement(BCField, {
+      label: "Recently Added Flashings",
+      path: ['bc', 'addedFlashings'],
+      placeholder: "No information was provided regarding recently added flashings.",
+      rows: 2
+    }), /*#__PURE__*/React.createElement(BCField, {
+      label: "Note",
+      path: ['bc', 'note'],
+      placeholder: "(No additional information provided.)",
+      rows: 1
+    })), /*#__PURE__*/React.createElement(Card, null, /*#__PURE__*/React.createElement(SecTitle, null, "Services"), /*#__PURE__*/React.createElement(BCField, {
+      label: "Water Source",
+      path: ['services', 'water'],
+      placeholder: "Connected to the municipal water supply (Watercare)",
+      rows: 1
+    }), /*#__PURE__*/React.createElement(BCField, {
+      label: "Sewage Disposal",
+      path: ['services', 'sewage'],
+      placeholder: "Connected to the public sewer network.",
+      rows: 1
+    }), /*#__PURE__*/React.createElement(BCField, {
+      label: "Gas Meter",
+      path: ['services', 'gas'],
+      placeholder: "A gas meter was observed.",
+      rows: 1
+    })), /*#__PURE__*/React.createElement(Card, null, /*#__PURE__*/React.createElement(SecTitle, null, "Zones"), /*#__PURE__*/React.createElement("div", {
       style: {
         fontSize: 11,
-        fontWeight: 700,
-        color: C.txt2
+        color: C.txt2,
+        marginBottom: 12,
+        lineHeight: 1.5
       }
-    }, "Alteration ", idx + 1), /*#__PURE__*/React.createElement("button", {
-      onClick: () => removeAlt(idx),
-      style: {
-        fontSize: 11,
-        color: C.danger,
-        background: 'none',
-        border: 'none',
-        cursor: 'pointer'
-      }
-    }, "✕ Remove")), /*#__PURE__*/React.createElement(FRow2, null, /*#__PURE__*/React.createElement(FRow, {
-      label: "Year"
-    }, /*#__PURE__*/React.createElement("input", {
-      style: inp,
-      type: "number",
-      defaultValue: alt.year || '',
-      onBlur: e => updAlt(idx, 'year', e.target.value),
-      placeholder: "e.g. 2015"
-    })), /*#__PURE__*/React.createElement(FRow, {
-      label: "Consent No."
-    }, /*#__PURE__*/React.createElement("input", {
-      style: inp,
-      defaultValue: alt.consentNo || '',
-      onBlur: e => updAlt(idx, 'consentNo', e.target.value),
-      placeholder: "e.g. B/2015/4892"
-    }))), /*#__PURE__*/React.createElement(FRow, {
-      label: "Description *"
-    }, /*#__PURE__*/React.createElement("textarea", {
-      style: {
-        ...inp,
-        minHeight: 54,
-        resize: 'none'
-      },
-      defaultValue: alt.description || '',
-      onBlur: e => updAlt(idx, 'description', e.target.value),
-      placeholder: "Describe the alteration or addition"
-    })), /*#__PURE__*/React.createElement(FRow2, null, /*#__PURE__*/React.createElement(FRow, {
-      label: "Consent Status"
+    }, "Recorded separately for the Site section and the weathertightness assessment."), /*#__PURE__*/React.createElement(FRow2, null, /*#__PURE__*/React.createElement(FRow, {
+      label: "Climate Zone"
     }, /*#__PURE__*/React.createElement("select", {
       style: inp,
-      value: alt.consentStatus || '',
-      onChange: e => {
-        updAlt(idx, 'consentStatus', e.target.value);
-        if (e.target.value === 'CCC not issued' || e.target.value === 'No consent found') {
-          showToast('This may warrant a Further Investigation item in the report.');
-        }
-      }
+      value: gi.zones?.climate || '',
+      onChange: e => updGI(['zones', 'climate'], e.target.value)
     }, /*#__PURE__*/React.createElement("option", {
       value: ""
-    }, "Select"), CONSENT_STATUS_OPTS.map(o => /*#__PURE__*/React.createElement("option", {
+    }, "Select"), ZONE_CLIMATE.map(o => /*#__PURE__*/React.createElement("option", {
       key: o
     }, o)))), /*#__PURE__*/React.createElement(FRow, {
-      label: "Source"
+      label: "Exposure Zone"
     }, /*#__PURE__*/React.createElement("select", {
       style: inp,
-      value: alt.source || '',
-      onChange: e => updAlt(idx, 'source', e.target.value)
+      value: gi.zones?.exposure || '',
+      onChange: e => updGI(['zones', 'exposure'], e.target.value)
     }, /*#__PURE__*/React.createElement("option", {
       value: ""
-    }, "Select"), SOURCE_OPTS.map(o => /*#__PURE__*/React.createElement("option", {
+    }, "Select"), ZONE_EXPOSURE.map(o => /*#__PURE__*/React.createElement("option", {
       key: o
-    }, o))))))), /*#__PURE__*/React.createElement("button", {
-      onClick: addAlt,
-      style: {
-        width: '100%',
-        padding: 9,
-        border: `1.5px dashed ${C.teal}`,
-        borderRadius: 8,
-        background: 'transparent',
-        color: C.teal,
-        fontSize: 13,
-        fontWeight: 600,
-        cursor: 'pointer'
-      }
-    }, "+ Add alteration"))), /*#__PURE__*/React.createElement(Card, null, /*#__PURE__*/React.createElement(SecTitle, null, "Site Exposure & Zones (Item 10)"), [['Climate Zone', 'climate', 'climateSource', ZONE_CLIMATE], ['Exposure Zone', 'exposure', 'exposureSource', ZONE_EXPOSURE], ['Wind Zone', 'wind', 'windSource', ZONE_WIND], ['Earthquake Zone', 'eq', 'eqSource', ZONE_EQ]].map(([lbl, fld, srcFld, opts]) => /*#__PURE__*/React.createElement("div", {
-      key: fld,
-      style: {
-        marginBottom: 14,
-        ...(isAssumed(gi.zones?.[srcFld]) ? {
-          paddingLeft: 8,
-          borderLeft: `2px solid ${AMBER_IND}`
-        } : {})
-      }
-    }, /*#__PURE__*/React.createElement("label", {
-      style: {
-        fontSize: 11,
-        color: C.txt2,
-        marginBottom: 4,
-        display: 'block',
-        fontWeight: 700,
-        textTransform: 'uppercase',
-        letterSpacing: '.04em'
-      }
-    }, lbl), /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: 'flex',
-        gap: 8,
-        alignItems: 'center'
-      }
+    }, o))))), /*#__PURE__*/React.createElement(FRow2, null, /*#__PURE__*/React.createElement(FRow, {
+      label: "Wind Zone"
     }, /*#__PURE__*/React.createElement("select", {
-      style: {
-        ...inp,
-        flex: 1
-      },
-      value: gi.zones?.[fld] || '',
-      onChange: e => updGI(['zones', fld], e.target.value)
+      style: inp,
+      value: gi.zones?.wind || '',
+      onChange: e => updGI(['zones', 'wind'], e.target.value)
     }, /*#__PURE__*/React.createElement("option", {
       value: ""
-    }, "Select"), opts.map(o => /*#__PURE__*/React.createElement("option", {
+    }, "Select"), ZONE_WIND.map(o => /*#__PURE__*/React.createElement("option", {
       key: o
-    }, o)))), /*#__PURE__*/React.createElement(SrcSel, {
-      value: gi.zones?.[srcFld],
-      onChange: e => updGI(['zones', srcFld], e.target.value)
-    })))), /*#__PURE__*/React.createElement(Card, null, /*#__PURE__*/React.createElement(SecTitle, null, "Building Overview"), /*#__PURE__*/React.createElement("div", {
-      style: {
-        marginBottom: 14,
-        ...(isAssumed(gi.storeys?.source) ? {
-          paddingLeft: 8,
-          borderLeft: `2px solid ${AMBER_IND}`
-        } : {})
-      }
-    }, /*#__PURE__*/React.createElement("label", {
-      style: {
-        fontSize: 11,
-        color: C.txt2,
-        marginBottom: 4,
-        display: 'block',
-        fontWeight: 700,
-        textTransform: 'uppercase',
-        letterSpacing: '.04em'
-      }
-    }, "Number of Storeys"), /*#__PURE__*/React.createElement("select", {
+    }, o)))), /*#__PURE__*/React.createElement(FRow, {
+      label: "Earthquake Zone"
+    }, /*#__PURE__*/React.createElement("select", {
       style: inp,
-      value: gi.storeys?.value || '',
-      onChange: e => updGI(['storeys', 'value'], e.target.value)
+      value: gi.zones?.eq || '',
+      onChange: e => updGI(['zones', 'eq'], e.target.value)
     }, /*#__PURE__*/React.createElement("option", {
       value: ""
-    }, "Select"), STOREYS_OPTS.map(o => /*#__PURE__*/React.createElement("option", {
+    }, "Select"), ZONE_EQ.map(o => /*#__PURE__*/React.createElement("option", {
       key: o
-    }, o))), /*#__PURE__*/React.createElement(SrcSel, {
-      value: gi.storeys?.source,
-      onChange: e => updGI(['storeys', 'source'], e.target.value)
-    })), /*#__PURE__*/React.createElement("div", {
-      style: {
-        ...(isAssumed(gi.buildingType?.source) ? {
-          paddingLeft: 8,
-          borderLeft: `2px solid ${AMBER_IND}`
-        } : {})
-      }
-    }, /*#__PURE__*/React.createElement("label", {
-      style: {
-        fontSize: 11,
-        color: C.txt2,
-        marginBottom: 4,
-        display: 'block',
-        fontWeight: 700,
-        textTransform: 'uppercase',
-        letterSpacing: '.04em'
-      }
-    }, "Building Type"), /*#__PURE__*/React.createElement("input", {
-      style: inp,
-      defaultValue: gi.buildingType?.value || '',
-      onBlur: e => updGI(['buildingType', 'value'], e.target.value),
-      placeholder: "e.g. Residential detached dwelling"
-    }), /*#__PURE__*/React.createElement(SrcSel, {
-      value: gi.buildingType?.source,
-      onChange: e => updGI(['buildingType', 'source'], e.target.value)
-    }))), /*#__PURE__*/React.createElement(Card, null, /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 12
-      }
-    }, /*#__PURE__*/React.createElement(SecTitle, {
-      style: {
-        margin: 0
-      }
-    }, "Wall Cladding (Items 08–09)"), (gi.characteristics?.cladding || []).length > 1 && /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontSize: 11,
-        fontWeight: 700,
-        background: C.teal,
-        color: '#fff',
-        padding: '2px 8px',
-        borderRadius: 10
-      }
-    }, (gi.characteristics?.cladding || []).length, " types")), (gi.characteristics?.cladding || []).map((entry, idx) => /*#__PURE__*/React.createElement(CharCard, {
-      key: entry.id,
-      type: "cladding",
-      entry: entry,
-      idx: idx,
-      typeList: CLADDING_TYPES,
-      label: "Cladding"
-    })), /*#__PURE__*/React.createElement("button", {
-      onClick: () => addChar('cladding'),
-      style: {
-        width: '100%',
-        padding: 9,
-        border: `1.5px dashed ${C.teal}`,
-        borderRadius: 8,
-        background: 'transparent',
-        color: C.teal,
-        fontSize: 13,
-        fontWeight: 600,
-        cursor: 'pointer'
-      }
-    }, "+ Add cladding type")), /*#__PURE__*/React.createElement(Card, null, /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 12
-      }
-    }, /*#__PURE__*/React.createElement(SecTitle, {
-      style: {
-        margin: 0
-      }
-    }, "Construction (Items 08–09)"), (gi.characteristics?.construction || []).length > 1 && /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontSize: 11,
-        fontWeight: 700,
-        background: C.teal,
-        color: '#fff',
-        padding: '2px 8px',
-        borderRadius: 10
-      }
-    }, (gi.characteristics?.construction || []).length, " types")), (gi.characteristics?.construction || []).map((entry, idx) => /*#__PURE__*/React.createElement(CharCard, {
-      key: entry.id,
-      type: "construction",
-      entry: entry,
-      idx: idx,
-      typeList: CONSTRUCTION_TYPES,
-      label: "Construction"
-    })), /*#__PURE__*/React.createElement("button", {
-      onClick: () => addChar('construction'),
-      style: {
-        width: '100%',
-        padding: 9,
-        border: `1.5px dashed ${C.teal}`,
-        borderRadius: 8,
-        background: 'transparent',
-        color: C.teal,
-        fontSize: 13,
-        fontWeight: 600,
-        cursor: 'pointer'
-      }
-    }, "+ Add construction type")), /*#__PURE__*/React.createElement(Card, null, /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 12
-      }
-    }, /*#__PURE__*/React.createElement(SecTitle, {
-      style: {
-        margin: 0
-      }
-    }, "Roof Type (Items 08–09)"), (gi.characteristics?.roof || []).length > 1 && /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontSize: 11,
-        fontWeight: 700,
-        background: C.teal,
-        color: '#fff',
-        padding: '2px 8px',
-        borderRadius: 10
-      }
-    }, (gi.characteristics?.roof || []).length, " types")), (gi.characteristics?.roof || []).map((entry, idx) => /*#__PURE__*/React.createElement(CharCard, {
-      key: entry.id,
-      type: "roof",
-      entry: entry,
-      idx: idx,
-      typeList: ROOF_TYPES,
-      label: "Roof"
-    })), /*#__PURE__*/React.createElement("button", {
-      onClick: () => addChar('roof'),
-      style: {
-        width: '100%',
-        padding: 9,
-        border: `1.5px dashed ${C.teal}`,
-        borderRadius: 8,
-        background: 'transparent',
-        color: C.teal,
-        fontSize: 13,
-        fontWeight: 600,
-        cursor: 'pointer'
-      }
-    }, "+ Add roof type")), /*#__PURE__*/React.createElement(Card, null, /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 12
-      }
-    }, /*#__PURE__*/React.createElement(SecTitle, {
-      style: {
-        margin: 0
-      }
-    }, "Foundation (Items 08–09)"), (gi.characteristics?.foundation || []).length > 1 && /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontSize: 11,
-        fontWeight: 700,
-        background: C.teal,
-        color: '#fff',
-        padding: '2px 8px',
-        borderRadius: 10
-      }
-    }, (gi.characteristics?.foundation || []).length, " types")), (gi.characteristics?.foundation || []).map((entry, idx) => /*#__PURE__*/React.createElement(CharCard, {
-      key: entry.id,
-      type: "foundation",
-      entry: entry,
-      idx: idx,
-      typeList: FOUNDATION_TYPES,
-      label: "Foundation"
-    })), /*#__PURE__*/React.createElement("button", {
-      onClick: () => addChar('foundation'),
-      style: {
-        width: '100%',
-        padding: 9,
-        border: `1.5px dashed ${C.teal}`,
-        borderRadius: 8,
-        background: 'transparent',
-        color: C.teal,
-        fontSize: 13,
-        fontWeight: 600,
-        cursor: 'pointer'
-      }
-    }, "+ Add foundation type")), /*#__PURE__*/React.createElement(Card, {
+    }, o)))))), /*#__PURE__*/React.createElement(Card, {
       style: {
         border: `2px solid ${cur.wt.rating === 'HIGH' ? '#C62828' : cur.wt.rating === 'MEDIUM' ? '#EF6C00' : cur.wt.rating === 'LOW' ? C.done : C.border}`
       }
