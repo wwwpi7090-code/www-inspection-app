@@ -1,5 +1,5 @@
-// WWW Property Inspection — Service Worker v3.3
-const CACHE_VERSION = 'v3.3.0';
+// WWW Property Inspection — Service Worker v3.4
+const CACHE_VERSION = 'v3.4.0';
 const CACHE_NAME = `www-inspection-${CACHE_VERSION}`;
 
 // App shell — adjust paths to match your Vercel deployment
