@@ -101,17 +101,17 @@ function openDB() {
   return _openDB.apply(this, arguments);
 }
 function _openDB() {
-  _openDB = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee13() {
-    return _regenerator().w(function (_context13) {
-      while (1) switch (_context13.n) {
+  _openDB = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee15() {
+    return _regenerator().w(function (_context15) {
+      while (1) switch (_context15.n) {
         case 0:
           if (!_dbInstance) {
-            _context13.n = 1;
+            _context15.n = 1;
             break;
           }
-          return _context13.a(2, _dbInstance);
+          return _context15.a(2, _dbInstance);
         case 1:
-          return _context13.a(2, new Promise(function (resolve, reject) {
+          return _context15.a(2, new Promise(function (resolve, reject) {
             var req = indexedDB.open(DB_NAME, DB_VERSION);
             req.onupgradeneeded = function (e) {
               var db = e.target.result;
@@ -141,7 +141,7 @@ function _openDB() {
             };
           }));
       }
-    }, _callee13);
+    }, _callee15);
   }));
   return _openDB.apply(this, arguments);
 }
@@ -149,16 +149,16 @@ function dbTx(_x, _x2, _x3) {
   return _dbTx.apply(this, arguments);
 }
 function _dbTx() {
-  _dbTx = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee14(storeName, mode, fn) {
+  _dbTx = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee16(storeName, mode, fn) {
     var db;
-    return _regenerator().w(function (_context14) {
-      while (1) switch (_context14.n) {
+    return _regenerator().w(function (_context16) {
+      while (1) switch (_context16.n) {
         case 0:
-          _context14.n = 1;
+          _context16.n = 1;
           return openDB();
         case 1:
-          db = _context14.v;
-          return _context14.a(2, new Promise(function (resolve, reject) {
+          db = _context16.v;
+          return _context16.a(2, new Promise(function (resolve, reject) {
             var tx = db.transaction(storeName, mode);
             var store = tx.objectStore(storeName);
             try {
@@ -183,7 +183,7 @@ function _dbTx() {
             }
           }));
       }
-    }, _callee14);
+    }, _callee16);
   }));
   return _dbTx.apply(this, arguments);
 }
@@ -211,16 +211,16 @@ function dbGetByIndex(_x4, _x5, _x6) {
   return _dbGetByIndex.apply(this, arguments);
 } // Read-back verification
 function _dbGetByIndex() {
-  _dbGetByIndex = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee15(store, indexName, value) {
+  _dbGetByIndex = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee17(store, indexName, value) {
     var db;
-    return _regenerator().w(function (_context15) {
-      while (1) switch (_context15.n) {
+    return _regenerator().w(function (_context17) {
+      while (1) switch (_context17.n) {
         case 0:
-          _context15.n = 1;
+          _context17.n = 1;
           return openDB();
         case 1:
-          db = _context15.v;
-          return _context15.a(2, new Promise(function (resolve, reject) {
+          db = _context17.v;
+          return _context17.a(2, new Promise(function (resolve, reject) {
             var tx = db.transaction(store, 'readonly');
             var req = tx.objectStore(store).index(indexName).getAll(value);
             req.onsuccess = function () {
@@ -231,7 +231,7 @@ function _dbGetByIndex() {
             };
           }));
       }
-    }, _callee15);
+    }, _callee17);
   }));
   return _dbGetByIndex.apply(this, arguments);
 }
@@ -239,28 +239,28 @@ function dbPutVerified(_x7, _x8) {
   return _dbPutVerified.apply(this, arguments);
 } // ─── LOCALSTORAGE MIGRATION ──────────────────────────────────
 function _dbPutVerified() {
-  _dbPutVerified = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee16(store, data) {
+  _dbPutVerified = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee18(store, data) {
     var key, readback;
-    return _regenerator().w(function (_context16) {
-      while (1) switch (_context16.n) {
+    return _regenerator().w(function (_context18) {
+      while (1) switch (_context18.n) {
         case 0:
-          _context16.n = 1;
+          _context18.n = 1;
           return dbPut(store, data);
         case 1:
           key = data[store === 'photos' ? 'photoId' : 'id'];
-          _context16.n = 2;
+          _context18.n = 2;
           return dbGet(store, key);
         case 2:
-          readback = _context16.v;
+          readback = _context18.v;
           if (readback) {
-            _context16.n = 3;
+            _context18.n = 3;
             break;
           }
           throw new Error("Read-back failed for ".concat(store, "/").concat(key));
         case 3:
-          return _context16.a(2, readback);
+          return _context18.a(2, readback);
       }
-    }, _callee16);
+    }, _callee18);
   }));
   return _dbPutVerified.apply(this, arguments);
 }
@@ -268,10 +268,10 @@ function migrateFromLocalStorage() {
   return _migrateFromLocalStorage.apply(this, arguments);
 } // ─── IMAGE UTILITIES ─────────────────────────────────────────
 function _migrateFromLocalStorage() {
-  _migrateFromLocalStorage = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee17() {
-    var LS_KEYS, raw, foundKey, _i, _LS_KEYS, k, v, inspections, migrated, _iterator3, _step3, ins, migratedItems, _i2, _Object$entries, _Object$entries$_i, itemId, itemData, photoRefs, oldPhotos, i, ph, base64, blob, photoId, _t14, _t15, _t16, _t17;
-    return _regenerator().w(function (_context17) {
-      while (1) switch (_context17.p = _context17.n) {
+  _migrateFromLocalStorage = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee19() {
+    var LS_KEYS, raw, foundKey, _i, _LS_KEYS, k, v, inspections, migrated, _iterator3, _step3, ins, migratedItems, _i2, _Object$entries, _Object$entries$_i, itemId, itemData, photoRefs, oldPhotos, i, ph, base64, blob, photoId, _t15, _t16, _t17, _t18;
+    return _regenerator().w(function (_context19) {
+      while (1) switch (_context19.p = _context19.n) {
         case 0:
           LS_KEYS = ['www_insp_v3', 'www_insp_v2', 'www_inspections_v1', 'www_inspections'];
           raw = null;
@@ -279,61 +279,61 @@ function _migrateFromLocalStorage() {
           _i = 0, _LS_KEYS = LS_KEYS;
         case 1:
           if (!(_i < _LS_KEYS.length)) {
-            _context17.n = 3;
+            _context19.n = 3;
             break;
           }
           k = _LS_KEYS[_i];
           v = localStorage.getItem(k);
           if (!v) {
-            _context17.n = 2;
+            _context19.n = 2;
             break;
           }
           raw = v;
           foundKey = k;
-          return _context17.a(3, 3);
+          return _context19.a(3, 3);
         case 2:
           _i++;
-          _context17.n = 1;
+          _context19.n = 1;
           break;
         case 3:
           if (raw) {
-            _context17.n = 4;
+            _context19.n = 4;
             break;
           }
-          return _context17.a(2, 0);
+          return _context19.a(2, 0);
         case 4:
           inspections = [];
-          _context17.p = 5;
+          _context19.p = 5;
           inspections = JSON.parse(raw);
-          _context17.n = 7;
+          _context19.n = 7;
           break;
         case 6:
-          _context17.p = 6;
-          _t14 = _context17.v;
-          return _context17.a(2, 0);
+          _context19.p = 6;
+          _t15 = _context19.v;
+          return _context19.a(2, 0);
         case 7:
           if (!(!Array.isArray(inspections) || !inspections.length)) {
-            _context17.n = 8;
+            _context19.n = 8;
             break;
           }
-          return _context17.a(2, 0);
+          return _context19.a(2, 0);
         case 8:
           migrated = 0;
           _iterator3 = _createForOfIteratorHelper(inspections);
-          _context17.p = 9;
+          _context19.p = 9;
           _iterator3.s();
         case 10:
           if ((_step3 = _iterator3.n()).done) {
-            _context17.n = 25;
+            _context19.n = 25;
             break;
           }
           ins = _step3.value;
-          _context17.p = 11;
+          _context19.p = 11;
           migratedItems = {};
           _i2 = 0, _Object$entries = Object.entries(ins.items || {});
         case 12:
           if (!(_i2 < _Object$entries.length)) {
-            _context17.n = 21;
+            _context19.n = 21;
             break;
           }
           _Object$entries$_i = _slicedToArray(_Object$entries[_i2], 2), itemId = _Object$entries$_i[0], itemData = _Object$entries$_i[1];
@@ -342,26 +342,26 @@ function _migrateFromLocalStorage() {
           i = 0;
         case 13:
           if (!(i < oldPhotos.length)) {
-            _context17.n = 19;
+            _context19.n = 19;
             break;
           }
           ph = oldPhotos[i];
           base64 = typeof ph === 'string' ? ph : ph === null || ph === void 0 ? void 0 : ph.data;
           if (!(!base64 || !base64.startsWith('data:'))) {
-            _context17.n = 14;
+            _context19.n = 14;
             break;
           }
-          return _context17.a(3, 18);
+          return _context19.a(3, 18);
         case 14:
-          _context17.p = 14;
-          _context17.n = 15;
+          _context19.p = 14;
+          _context19.n = 15;
           return fetch(base64).then(function (r) {
             return r.blob();
           });
         case 15:
-          blob = _context17.v;
+          blob = _context19.v;
           photoId = gid();
-          _context17.n = 16;
+          _context19.n = 16;
           return dbPut('photos', {
             photoId: photoId,
             inspectionId: ins.id,
@@ -381,14 +381,14 @@ function _migrateFromLocalStorage() {
             saveStatus: 'ok',
             savedToDevice: false
           });
-          _context17.n = 18;
+          _context19.n = 18;
           break;
         case 17:
-          _context17.p = 17;
-          _t15 = _context17.v;
+          _context19.p = 17;
+          _t16 = _context19.v;
         case 18:
           i++;
-          _context17.n = 13;
+          _context19.n = 13;
           break;
         case 19:
           migratedItems[itemId] = _objectSpread(_objectSpread({}, itemData), {}, {
@@ -396,45 +396,45 @@ function _migrateFromLocalStorage() {
           });
         case 20:
           _i2++;
-          _context17.n = 12;
+          _context19.n = 12;
           break;
         case 21:
-          _context17.n = 22;
+          _context19.n = 22;
           return dbPut('inspections', _objectSpread(_objectSpread({}, ins), {}, {
             items: migratedItems,
             _migrated: true
           }));
         case 22:
           migrated++;
-          _context17.n = 24;
+          _context19.n = 24;
           break;
         case 23:
-          _context17.p = 23;
-          _t16 = _context17.v;
-          console.warn('Migration error for inspection:', ins.id, _t16);
+          _context19.p = 23;
+          _t17 = _context19.v;
+          console.warn('Migration error for inspection:', ins.id, _t17);
         case 24:
-          _context17.n = 10;
+          _context19.n = 10;
           break;
         case 25:
-          _context17.n = 27;
+          _context19.n = 27;
           break;
         case 26:
-          _context17.p = 26;
-          _t17 = _context17.v;
-          _iterator3.e(_t17);
+          _context19.p = 26;
+          _t18 = _context19.v;
+          _iterator3.e(_t18);
         case 27:
-          _context17.p = 27;
+          _context19.p = 27;
           _iterator3.f();
-          return _context17.f(27);
+          return _context19.f(27);
         case 28:
           // Remove old LS data
           LS_KEYS.forEach(function (k) {
             return localStorage.removeItem(k);
           });
           console.log("[Migration] Migrated ".concat(migrated, " inspections from LocalStorage"));
-          return _context17.a(2, migrated);
+          return _context19.a(2, migrated);
       }
-    }, _callee17, null, [[14, 17], [11, 23], [9, 26, 27, 28], [5, 6]]);
+    }, _callee19, null, [[14, 17], [11, 23], [9, 26, 27, 28], [5, 6]]);
   }));
   return _migrateFromLocalStorage.apply(this, arguments);
 }
@@ -442,44 +442,44 @@ function compressImage(_x9) {
   return _compressImage.apply(this, arguments);
 }
 function _compressImage() {
-  _compressImage = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee18(file) {
+  _compressImage = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee20(file) {
     var maxEdge,
       quality,
       bitmap,
       scale,
       canvas,
-      _args18 = arguments,
-      _t18;
-    return _regenerator().w(function (_context18) {
-      while (1) switch (_context18.p = _context18.n) {
+      _args20 = arguments,
+      _t19;
+    return _regenerator().w(function (_context20) {
+      while (1) switch (_context20.p = _context20.n) {
         case 0:
-          maxEdge = _args18.length > 1 && _args18[1] !== undefined ? _args18[1] : 1600;
-          quality = _args18.length > 2 && _args18[2] !== undefined ? _args18[2] : 0.75;
-          _context18.p = 1;
-          _context18.n = 2;
+          maxEdge = _args20.length > 1 && _args20[1] !== undefined ? _args20[1] : 1600;
+          quality = _args20.length > 2 && _args20[2] !== undefined ? _args20[2] : 0.75;
+          _context20.p = 1;
+          _context20.n = 2;
           return createImageBitmap(file);
         case 2:
-          bitmap = _context18.v;
+          bitmap = _context20.v;
           scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height));
           canvas = document.createElement('canvas');
           canvas.width = Math.round(bitmap.width * scale);
           canvas.height = Math.round(bitmap.height * scale);
           canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-          _context18.n = 3;
+          _context20.n = 3;
           return new Promise(function (resolve, reject) {
             return canvas.toBlob(function (b) {
               return b ? resolve(b) : reject(new Error('toBlob returned null'));
             }, 'image/jpeg', quality);
           });
         case 3:
-          return _context18.a(2, _context18.v);
+          return _context20.a(2, _context20.v);
         case 4:
-          _context18.p = 4;
-          _t18 = _context18.v;
-          console.warn('[Compress] Falling back to original:', _t18);
-          return _context18.a(2, file.slice());
+          _context20.p = 4;
+          _t19 = _context20.v;
+          console.warn('[Compress] Falling back to original:', _t19);
+          return _context20.a(2, file.slice());
       }
-    }, _callee18, null, [[1, 4]]);
+    }, _callee20, null, [[1, 4]]);
   }));
   return _compressImage.apply(this, arguments);
 }
@@ -512,39 +512,39 @@ function checkStorageQuota() {
   return _checkStorageQuota.apply(this, arguments);
 } // ─── CONSTANTS ───────────────────────────────────────────────
 function _checkStorageQuota() {
-  _checkStorageQuota = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee19() {
+  _checkStorageQuota = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee21() {
     var _navigator$storage;
-    var _navigator$storage$pe, _navigator$storage2, _yield$navigator$stor, usage, quota, _t19;
-    return _regenerator().w(function (_context19) {
-      while (1) switch (_context19.p = _context19.n) {
+    var _navigator$storage$pe, _navigator$storage2, _yield$navigator$stor, usage, quota, _t20;
+    return _regenerator().w(function (_context21) {
+      while (1) switch (_context21.p = _context21.n) {
         case 0:
           if ((_navigator$storage = navigator.storage) !== null && _navigator$storage !== void 0 && _navigator$storage.estimate) {
-            _context19.n = 1;
+            _context21.n = 1;
             break;
           }
-          return _context19.a(2, null);
+          return _context21.a(2, null);
         case 1:
-          _context19.p = 1;
-          _context19.n = 2;
+          _context21.p = 1;
+          _context21.n = 2;
           return navigator.storage.estimate();
         case 2:
-          _yield$navigator$stor = _context19.v;
+          _yield$navigator$stor = _context21.v;
           usage = _yield$navigator$stor.usage;
           quota = _yield$navigator$stor.quota;
-          _context19.n = 3;
+          _context21.n = 3;
           return (_navigator$storage$pe = (_navigator$storage2 = navigator.storage).persist) === null || _navigator$storage$pe === void 0 ? void 0 : _navigator$storage$pe.call(_navigator$storage2);
         case 3:
-          return _context19.a(2, {
+          return _context21.a(2, {
             usage: usage,
             quota: quota,
             pct: quota ? Math.round(usage / quota * 100) : 0
           });
         case 4:
-          _context19.p = 4;
-          _t19 = _context19.v;
-          return _context19.a(2, null);
+          _context21.p = 4;
+          _t20 = _context21.v;
+          return _context21.a(2, null);
       }
-    }, _callee19, null, [[1, 4]]);
+    }, _callee21, null, [[1, 4]]);
   }));
   return _checkStorageQuota.apply(this, arguments);
 }
@@ -1690,38 +1690,59 @@ function App() {
     setWordGenerating = _useState18[1];
   var _useState19 = useState(false),
     _useState20 = _slicedToArray(_useState19, 2),
-    migrationBanner = _useState20[0],
-    setMigrationBanner = _useState20[1];
-  var _useState21 = useState(null),
+    showLimModal = _useState20[0],
+    setShowLimModal = _useState20[1];
+  var _useState21 = useState(''),
     _useState22 = _slicedToArray(_useState21, 2),
-    aiItemLoad = _useState22[0],
-    setAiItemLoad = _useState22[1];
-  var _useState23 = useState(null),
+    limText = _useState22[0],
+    setLimText = _useState22[1];
+  var _useState23 = useState(false),
     _useState24 = _slicedToArray(_useState23, 2),
-    toast = _useState24[0],
-    setToast = _useState24[1];
-  var _useState25 = useState(null),
+    aiLimLoading = _useState24[0],
+    setAiLimLoading = _useState24[1];
+  var _useState25 = useState('pdf'),
     _useState26 = _slicedToArray(_useState25, 2),
-    gradeDialog = _useState26[0],
-    setGradeDialog = _useState26[1]; // { itemId, label }
-  var _useState27 = useState(navigator.onLine),
+    limInputMode = _useState26[0],
+    setLimInputMode = _useState26[1];
+  var _useState27 = useState(null),
     _useState28 = _slicedToArray(_useState27, 2),
-    isOnline = _useState28[0],
-    setIsOnline = _useState28[1];
+    limPdfFile = _useState28[0],
+    setLimPdfFile = _useState28[1];
   var _useState29 = useState(false),
     _useState30 = _slicedToArray(_useState29, 2),
-    storageWarning = _useState30[0],
-    setStorageWarning = _useState30[1];
-  var _useState31 = useState(false),
+    migrationBanner = _useState30[0],
+    setMigrationBanner = _useState30[1];
+  var _useState31 = useState(null),
     _useState32 = _slicedToArray(_useState31, 2),
-    swUpdate = _useState32[0],
-    setSwUpdate = _useState32[1];
-  var _useState33 = useState([]),
+    aiItemLoad = _useState32[0],
+    setAiItemLoad = _useState32[1];
+  var _useState33 = useState(null),
     _useState34 = _slicedToArray(_useState33, 2),
-    validationErrors = _useState34[0],
-    setValidationErrors = _useState34[1];
+    toast = _useState34[0],
+    setToast = _useState34[1];
+  var _useState35 = useState(null),
+    _useState36 = _slicedToArray(_useState35, 2),
+    gradeDialog = _useState36[0],
+    setGradeDialog = _useState36[1]; // { itemId, label }
+  var _useState37 = useState(navigator.onLine),
+    _useState38 = _slicedToArray(_useState37, 2),
+    isOnline = _useState38[0],
+    setIsOnline = _useState38[1];
+  var _useState39 = useState(false),
+    _useState40 = _slicedToArray(_useState39, 2),
+    storageWarning = _useState40[0],
+    setStorageWarning = _useState40[1];
+  var _useState41 = useState(false),
+    _useState42 = _slicedToArray(_useState41, 2),
+    swUpdate = _useState42[0],
+    setSwUpdate = _useState42[1];
+  var _useState43 = useState([]),
+    _useState44 = _slicedToArray(_useState43, 2),
+    validationErrors = _useState44[0],
+    setValidationErrors = _useState44[1];
   var fileRef = useRef();
   var importRef = useRef();
+  var limPdfRef = useRef();
   var pendingPhotoItem = useRef(null);
 
   // ── Init: open DB, migrate, load ────────────────────────────
@@ -1851,16 +1872,16 @@ function App() {
     return _saveInspection.apply(this, arguments);
   }
   function _saveInspection() {
-    _saveInspection = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee4(ins) {
+    _saveInspection = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee5(ins) {
       var u, _t3;
-      return _regenerator().w(function (_context4) {
-        while (1) switch (_context4.p = _context4.n) {
+      return _regenerator().w(function (_context5) {
+        while (1) switch (_context5.p = _context5.n) {
           case 0:
             u = _objectSpread(_objectSpread({}, ins), {}, {
               updatedAt: new Date().toISOString()
             });
-            _context4.p = 1;
-            _context4.n = 2;
+            _context5.p = 1;
+            _context5.n = 2;
             return dbPutVerified('inspections', u);
           case 2:
             setList(function (p) {
@@ -1872,16 +1893,16 @@ function App() {
               return n;
             });
             setCur(u);
-            return _context4.a(2, u);
+            return _context5.a(2, u);
           case 3:
-            _context4.p = 3;
-            _t3 = _context4.v;
+            _context5.p = 3;
+            _t3 = _context5.v;
             showToast('⚠️ Save failed — retry', 'error');
             throw _t3;
           case 4:
-            return _context4.a(2);
+            return _context5.a(2);
         }
-      }, _callee4, null, [[1, 3]]);
+      }, _callee5, null, [[1, 3]]);
     }));
     return _saveInspection.apply(this, arguments);
   }
@@ -1917,48 +1938,48 @@ function App() {
     return _delInsp.apply(this, arguments);
   } // ── Photo handling ───────────────────────────────────────────
   function _delInsp() {
-    _delInsp = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee5(id) {
+    _delInsp = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee6(id) {
       var photos, _iterator2, _step2, ph, _t4;
-      return _regenerator().w(function (_context5) {
-        while (1) switch (_context5.p = _context5.n) {
+      return _regenerator().w(function (_context6) {
+        while (1) switch (_context6.p = _context6.n) {
           case 0:
             if (confirm('Delete this inspection and all its photos?')) {
-              _context5.n = 1;
+              _context6.n = 1;
               break;
             }
-            return _context5.a(2);
+            return _context6.a(2);
           case 1:
-            _context5.n = 2;
+            _context6.n = 2;
             return dbGetByIndex('photos', 'byInspection', id);
           case 2:
-            photos = _context5.v;
+            photos = _context6.v;
             _iterator2 = _createForOfIteratorHelper(photos);
-            _context5.p = 3;
+            _context6.p = 3;
             _iterator2.s();
           case 4:
             if ((_step2 = _iterator2.n()).done) {
-              _context5.n = 6;
+              _context6.n = 6;
               break;
             }
             ph = _step2.value;
-            _context5.n = 5;
+            _context6.n = 5;
             return dbDelete('photos', ph.photoId);
           case 5:
-            _context5.n = 4;
+            _context6.n = 4;
             break;
           case 6:
-            _context5.n = 8;
+            _context6.n = 8;
             break;
           case 7:
-            _context5.p = 7;
-            _t4 = _context5.v;
+            _context6.p = 7;
+            _t4 = _context6.v;
             _iterator2.e(_t4);
           case 8:
-            _context5.p = 8;
+            _context6.p = 8;
             _iterator2.f();
-            return _context5.f(8);
+            return _context6.f(8);
           case 9:
-            _context5.n = 10;
+            _context6.n = 10;
             return dbDelete('inspections', id);
           case 10:
             setList(function (p) {
@@ -1969,9 +1990,9 @@ function App() {
             setCur(null);
             setPage('home');
           case 11:
-            return _context5.a(2);
+            return _context6.a(2);
         }
-      }, _callee5, null, [[3, 7, 8, 9]]);
+      }, _callee6, null, [[3, 7, 8, 9]]);
     }));
     return _delInsp.apply(this, arguments);
   }
@@ -1979,17 +2000,17 @@ function App() {
     return _handleFiles.apply(this, arguments);
   }
   function _handleFiles() {
-    _handleFiles = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee6(files, itemId) {
+    _handleFiles = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee7(files, itemId) {
       var _item$photos;
       var ins, item, existingCount, i, file, _ins$items$itemId, _yield$dbGet, blob, photoId, seq, allPhotos, globalNum, defectRef, photoSuffix, photoLabel, filename, photoRecord, saveStatus, savedToDevice, _photoRef, updatedPhotos, latestItem, statusMsg, _t5, _t6, _t7, _t8, _t9, _t0, _t1;
-      return _regenerator().w(function (_context6) {
-        while (1) switch (_context6.p = _context6.n) {
+      return _regenerator().w(function (_context7) {
+        while (1) switch (_context7.p = _context7.n) {
           case 0:
             if (!(!(files !== null && files !== void 0 && files.length) || !itemId)) {
-              _context6.n = 1;
+              _context7.n = 1;
               break;
             }
-            return _context6.a(2);
+            return _context7.a(2);
           case 1:
             ins = cur;
             item = ins.items[itemId];
@@ -1997,15 +2018,15 @@ function App() {
             i = 0;
           case 2:
             if (!(i < files.length)) {
-              _context6.n = 19;
+              _context7.n = 19;
               break;
             }
             file = files[i];
-            _context6.p = 3;
-            _context6.n = 4;
+            _context7.p = 3;
+            _context7.n = 4;
             return compressImage(file);
           case 4:
-            blob = _context6.v;
+            blob = _context7.v;
             // 2. Build photo record
             photoId = gid();
             seq = existingCount + i + 1; // Global photo number across inspection
@@ -2030,17 +2051,17 @@ function App() {
               createdAt: new Date().toISOString()
             };
             saveStatus = 'ok';
-            _context6.p = 5;
-            _context6.n = 6;
+            _context7.p = 5;
+            _context7.n = 6;
             return dbPutVerified('photos', _objectSpread(_objectSpread({}, photoRecord), {}, {
               saveStatus: 'ok'
             }));
           case 6:
-            _context6.n = 8;
+            _context7.n = 8;
             break;
           case 7:
-            _context6.p = 7;
-            _t5 = _context6.v;
+            _context7.p = 7;
+            _t5 = _context7.v;
             saveStatus = 'fail';
             showToast('🔴 Photo save to app failed — retry', 'error');
           case 8:
@@ -2053,10 +2074,10 @@ function App() {
 
             // 5. Update IndexedDB record with final status
             if (!(saveStatus !== 'pending')) {
-              _context6.n = 9;
+              _context7.n = 9;
               break;
             }
-            _context6.n = 9;
+            _context7.n = 9;
             return dbPut('photos', _objectSpread(_objectSpread({}, photoRecord), {}, {
               saveStatus: saveStatus,
               savedToDevice: savedToDevice
@@ -2072,43 +2093,43 @@ function App() {
               savedToDevice: savedToDevice
             };
             updatedPhotos = [].concat(_toConsumableArray(item.photos || []), [_photoRef]); // Re-fetch cur in case multiple files are being processed
-            _context6.n = 10;
+            _context7.n = 10;
             return dbGet('inspections', ins.id);
           case 10:
-            _t9 = _yield$dbGet = _context6.v;
+            _t9 = _yield$dbGet = _context7.v;
             _t8 = _t9 === null;
             if (_t8) {
-              _context6.n = 11;
+              _context7.n = 11;
               break;
             }
             _t8 = _yield$dbGet === void 0;
           case 11:
             _t7 = _t8;
             if (_t7) {
-              _context6.n = 12;
+              _context7.n = 12;
               break;
             }
             _t7 = (_yield$dbGet = _yield$dbGet.items) === null || _yield$dbGet === void 0;
           case 12:
             if (!_t7) {
-              _context6.n = 13;
+              _context7.n = 13;
               break;
             }
             _t0 = void 0;
-            _context6.n = 14;
+            _context7.n = 14;
             break;
           case 13:
             _t0 = _yield$dbGet[itemId];
           case 14:
             _t6 = _t0;
             if (_t6) {
-              _context6.n = 15;
+              _context7.n = 15;
               break;
             }
             _t6 = ins.items[itemId];
           case 15:
             latestItem = _t6;
-            _context6.n = 16;
+            _context7.n = 16;
             return saveInspection(_objectSpread(_objectSpread({}, ins), {}, {
               items: _objectSpread(_objectSpread({}, ins.items), {}, _defineProperty({}, itemId, _objectSpread(_objectSpread({}, latestItem), {}, {
                 photos: [].concat(_toConsumableArray(latestItem.photos || []), [_photoRef])
@@ -2117,23 +2138,23 @@ function App() {
           case 16:
             statusMsg = savedToDevice ? '✅ Photo saved + downloaded' : saveStatus === 'ok' ? '💾 Photo saved to app' : '⚠️ Partial save — check';
             showToast(statusMsg, saveStatus === 'fail' ? 'error' : 'ok');
-            _context6.n = 18;
+            _context7.n = 18;
             break;
           case 17:
-            _context6.p = 17;
-            _t1 = _context6.v;
+            _context7.p = 17;
+            _t1 = _context7.v;
             console.error('Photo handling error:', _t1);
             showToast('🔴 Photo error — please retry', 'error');
           case 18:
             i++;
-            _context6.n = 2;
+            _context7.n = 2;
             break;
           case 19:
             fileRef.current.value = '';
           case 20:
-            return _context6.a(2);
+            return _context7.a(2);
         }
-      }, _callee6, null, [[5, 7], [3, 17]]);
+      }, _callee7, null, [[5, 7], [3, 17]]);
     }));
     return _handleFiles.apply(this, arguments);
   }
@@ -2144,23 +2165,23 @@ function App() {
     return _deletePhoto.apply(this, arguments);
   } // ── Defect auto-numbering ────────────────────────────────────
   function _deletePhoto() {
-    _deletePhoto = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee7(itemId, photoIdx) {
+    _deletePhoto = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee8(itemId, photoIdx) {
       var d, photoRef, photos;
-      return _regenerator().w(function (_context7) {
-        while (1) switch (_context7.n) {
+      return _regenerator().w(function (_context8) {
+        while (1) switch (_context8.n) {
           case 0:
             d = cur.items[itemId];
             photoRef = d.photos[photoIdx];
             if (!(photoRef !== null && photoRef !== void 0 && photoRef.photoId)) {
-              _context7.n = 1;
+              _context8.n = 1;
               break;
             }
-            _context7.n = 1;
+            _context8.n = 1;
             return dbDelete('photos', photoRef.photoId).catch(function () {});
           case 1:
             photos = _toConsumableArray(d.photos);
             photos.splice(photoIdx, 1);
-            _context7.n = 2;
+            _context8.n = 2;
             return updItem(itemId, {
               photos: photos
             });
@@ -2168,9 +2189,9 @@ function App() {
             setPhotoMod(null);
             showToast('Photo deleted');
           case 3:
-            return _context7.a(2);
+            return _context8.a(2);
         }
-      }, _callee7);
+      }, _callee8);
     }));
     return _deletePhoto.apply(this, arguments);
   }
@@ -2191,38 +2212,38 @@ function App() {
     return _toggleFlag.apply(this, arguments);
   }
   function _toggleFlag() {
-    _toggleFlag = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee8(itemId, itemLabel) {
+    _toggleFlag = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee9(itemId, itemLabel) {
       var d, defectRef;
-      return _regenerator().w(function (_context8) {
-        while (1) switch (_context8.n) {
+      return _regenerator().w(function (_context9) {
+        while (1) switch (_context9.n) {
           case 0:
             d = cur.items[itemId];
             if (!d.flagged) {
-              _context8.n = 2;
+              _context9.n = 2;
               break;
             }
-            _context8.n = 1;
+            _context9.n = 1;
             return updItem(itemId, {
               flagged: false,
               grade: '',
               axes: []
             });
           case 1:
-            _context8.n = 3;
+            _context9.n = 3;
             break;
           case 2:
             // Flag — assign D-XX number if not already assigned
             defectRef = d.defectRef || nextDefectRef(cur);
-            _context8.n = 3;
+            _context9.n = 3;
             return updItem(itemId, {
               flagged: true,
               status: ST.done,
               defectRef: defectRef
             });
           case 3:
-            return _context8.a(2);
+            return _context9.a(2);
         }
-      }, _callee8);
+      }, _callee9);
     }));
     return _toggleFlag.apply(this, arguments);
   }
@@ -2230,12 +2251,12 @@ function App() {
     return _handleGradeSelect.apply(this, arguments);
   }
   function _handleGradeSelect() {
-    _handleGradeSelect = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee9(itemId, gradeId) {
-      return _regenerator().w(function (_context9) {
-        while (1) switch (_context9.n) {
+    _handleGradeSelect = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee0(itemId, gradeId) {
+      return _regenerator().w(function (_context0) {
+        while (1) switch (_context0.n) {
           case 0:
             if (!(gradeId === 'significant')) {
-              _context9.n = 1;
+              _context0.n = 1;
               break;
             }
             // Confirmation dialog
@@ -2243,17 +2264,17 @@ function App() {
               itemId: itemId,
               grade: gradeId
             });
-            _context9.n = 2;
+            _context0.n = 2;
             break;
           case 1:
-            _context9.n = 2;
+            _context0.n = 2;
             return updItem(itemId, {
               grade: gradeId
             });
           case 2:
-            return _context9.a(2);
+            return _context0.a(2);
         }
-      }, _callee9);
+      }, _callee0);
     }));
     return _handleGradeSelect.apply(this, arguments);
   }
@@ -2261,26 +2282,26 @@ function App() {
     return _confirmSignificant.apply(this, arguments);
   } // ── AI comment ──────────────────────────────────────────────
   function _confirmSignificant() {
-    _confirmSignificant = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee0() {
-      return _regenerator().w(function (_context0) {
-        while (1) switch (_context0.n) {
+    _confirmSignificant = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee1() {
+      return _regenerator().w(function (_context1) {
+        while (1) switch (_context1.n) {
           case 0:
             if (gradeDialog) {
-              _context0.n = 1;
+              _context1.n = 1;
               break;
             }
-            return _context0.a(2);
+            return _context1.a(2);
           case 1:
-            _context0.n = 2;
+            _context1.n = 2;
             return updItem(gradeDialog.itemId, {
               grade: 'significant'
             });
           case 2:
             setGradeDialog(null);
           case 3:
-            return _context0.a(2);
+            return _context1.a(2);
         }
-      }, _callee0);
+      }, _callee1);
     }));
     return _confirmSignificant.apply(this, arguments);
   }
@@ -2288,15 +2309,15 @@ function App() {
     return _aiComment.apply(this, arguments);
   } // ── AI Executive Summary ────────────────────────────────────
   function _aiComment() {
-    _aiComment = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee1(itemId, itemLabel, catLabel) {
+    _aiComment = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee10(itemId, itemLabel, catLabel) {
       var d, _data$content, res, data, text, p, _t10;
-      return _regenerator().w(function (_context1) {
-        while (1) switch (_context1.p = _context1.n) {
+      return _regenerator().w(function (_context10) {
+        while (1) switch (_context10.p = _context10.n) {
           case 0:
             setAiItemLoad(itemId);
             d = cur.items[itemId];
-            _context1.p = 1;
-            _context1.n = 2;
+            _context10.p = 1;
+            _context10.n = 2;
             return fetch('https://api.anthropic.com/v1/messages', {
               method: 'POST',
               headers: {
@@ -2312,14 +2333,14 @@ function App() {
               })
             });
           case 2:
-            res = _context1.v;
-            _context1.n = 3;
+            res = _context10.v;
+            _context10.n = 3;
             return res.json();
           case 3:
-            data = _context1.v;
+            data = _context10.v;
             text = ((_data$content = data.content) === null || _data$content === void 0 || (_data$content = _data$content[0]) === null || _data$content === void 0 || (_data$content = _data$content.text) === null || _data$content === void 0 ? void 0 : _data$content.replace(/```json|```/g, '').trim()) || '{}';
             p = JSON.parse(text);
-            _context1.n = 4;
+            _context10.n = 4;
             return updItem(itemId, {
               description: p.description || '',
               implication: p.implication || '',
@@ -2327,18 +2348,18 @@ function App() {
             });
           case 4:
             showToast('✨ AI fields generated');
-            _context1.n = 6;
+            _context10.n = 6;
             break;
           case 5:
-            _context1.p = 5;
-            _t10 = _context1.v;
+            _context10.p = 5;
+            _t10 = _context10.v;
             showToast('AI error — try again', 'error');
           case 6:
             setAiItemLoad(null);
           case 7:
-            return _context1.a(2);
+            return _context10.a(2);
         }
-      }, _callee1, null, [[1, 5]]);
+      }, _callee10, null, [[1, 5]]);
     }));
     return _aiComment.apply(this, arguments);
   }
@@ -2346,10 +2367,10 @@ function App() {
     return _genExecSummary.apply(this, arguments);
   } // ── generalInfo update helpers ──────────────────────────────
   function _genExecSummary() {
-    _genExecSummary = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee10() {
+    _genExecSummary = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee11() {
       var sig, _data$content2, res, data, _t11;
-      return _regenerator().w(function (_context10) {
-        while (1) switch (_context10.p = _context10.n) {
+      return _regenerator().w(function (_context11) {
+        while (1) switch (_context11.p = _context11.n) {
           case 0:
             setAiLoad(true);
             sig = [];
@@ -2361,8 +2382,8 @@ function App() {
                 }
               });
             });
-            _context10.p = 1;
-            _context10.n = 2;
+            _context11.p = 1;
+            _context11.n = 2;
             return fetch('https://api.anthropic.com/v1/messages', {
               method: 'POST',
               headers: {
@@ -2378,29 +2399,29 @@ function App() {
               })
             });
           case 2:
-            res = _context10.v;
-            _context10.n = 3;
+            res = _context11.v;
+            _context11.n = 3;
             return res.json();
           case 3:
-            data = _context10.v;
-            _context10.n = 4;
+            data = _context11.v;
+            _context11.n = 4;
             return saveInspection(_objectSpread(_objectSpread({}, cur), {}, {
               execSummary: ((_data$content2 = data.content) === null || _data$content2 === void 0 || (_data$content2 = _data$content2[0]) === null || _data$content2 === void 0 ? void 0 : _data$content2.text) || ''
             }));
           case 4:
             showToast('✨ Executive Summary generated');
-            _context10.n = 6;
+            _context11.n = 6;
             break;
           case 5:
-            _context10.p = 5;
-            _t11 = _context10.v;
+            _context11.p = 5;
+            _t11 = _context11.v;
             showToast('AI error', 'error');
           case 6:
             setAiLoad(false);
           case 7:
-            return _context10.a(2);
+            return _context11.a(2);
         }
-      }, _callee10, null, [[1, 5]]);
+      }, _callee11, null, [[1, 5]]);
     }));
     return _genExecSummary.apply(this, arguments);
   }
@@ -2458,7 +2479,195 @@ function App() {
     }));
   }
 
-  // ── Export / Import JSON ────────────────────────────────────
+  // ── AI Fill from LIM (PDF upload or text paste) ───────────────
+  function aiFromLIM() {
+    return _aiFromLIM.apply(this, arguments);
+  } // ── Export / Import JSON ────────────────────────────────────
+  function _aiFromLIM() {
+    _aiFromLIM = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee12() {
+      var _data$content3, _ex$tenure, _ex$age, _ex$alterations, _ex$address, _ex$tenure2, _ex$age2, _ex$alterations2, claddingList, constList, roofList, foundList, prompt, messageContent, base64, res, data, raw, ex, _gi, existingNos, newAlts, updates, filled, _t12;
+      return _regenerator().w(function (_context12) {
+        while (1) switch (_context12.p = _context12.n) {
+          case 0:
+            setAiLimLoading(true);
+            _context12.p = 1;
+            claddingList = CLADDING_TYPES.filter(function (t) {
+              return t !== 'Other (specify)';
+            }).join(', ');
+            constList = CONSTRUCTION_TYPES.filter(function (t) {
+              return t !== 'Other (specify)';
+            }).join(', ');
+            roofList = ROOF_TYPES.filter(function (t) {
+              return t !== 'Other (specify)';
+            }).join(', ');
+            foundList = FOUNDATION_TYPES.filter(function (t) {
+              return t !== 'Other (specify)';
+            }).join(', ');
+            prompt = "You are a NZ building inspection expert. Extract information from this LIM/property document and return ONLY valid JSON with no other text.\n\nReturn this exact structure (leave fields empty string \"\" if not found):\n{\n  \"address\": { \"asPerTitle\": \"\", \"alsoKnownAs\": \"\", \"legalDescription\": \"\", \"titleRef\": \"\", \"territorialAuthority\": \"\", \"limDate\": \"\" },\n  \"tenure\": { \"type\": \"\", \"designation\": \"\", \"otherUnits\": \"\", \"sharedLand\": \"\" },\n  \"age\": { \"mode\": \"\", \"yearBuilt\": \"\", \"decade\": \"\" },\n  \"characteristics\": {\n    \"cladding\": [{\"type\": \"\", \"area\": \"\"}],\n    \"construction\": [{\"type\": \"\", \"area\": \"\"}],\n    \"roof\": [{\"type\": \"\", \"area\": \"\"}],\n    \"foundation\": [{\"type\": \"\", \"area\": \"\"}]\n  },\n  \"zones\": { \"climate\": \"\", \"exposure\": \"\", \"wind\": \"\", \"eq\": \"\" },\n  \"alterations\": [{\"year\": \"\", \"consentNo\": \"\", \"description\": \"\", \"consentStatus\": \"\"}]\n}\n\nRules:\n- tenure.type: Freehold, Cross-lease, Unit title, Leasehold, or Not determined\n- age.mode: year, decade, or undetermined. age.decade format: \"1970s\"\n- cladding types from: ".concat(claddingList, "\n- construction types from: ").concat(constList, "\n- roof types from: ").concat(roofList, "\n- foundation types from: ").concat(foundList, "\n- consentStatus: CCC issued, CCC not issued, No consent found, or Not determined\n- limDate format: DD/MM/YYYY\n- Include ALL consent/alteration records found\n- If multiple cladding/construction/roof/foundation, include all as array items");
+            if (!(limInputMode === 'pdf' && limPdfFile)) {
+              _context12.n = 3;
+              break;
+            }
+            _context12.n = 2;
+            return new Promise(function (resolve, reject) {
+              var reader = new FileReader();
+              reader.onload = function () {
+                return resolve(reader.result.split(',')[1]);
+              };
+              reader.onerror = reject;
+              reader.readAsDataURL(limPdfFile);
+            });
+          case 2:
+            base64 = _context12.v;
+            messageContent = [{
+              type: 'document',
+              source: {
+                type: 'base64',
+                media_type: 'application/pdf',
+                data: base64
+              }
+            }, {
+              type: 'text',
+              text: prompt
+            }];
+            _context12.n = 4;
+            break;
+          case 3:
+            // Text mode
+            messageContent = [{
+              type: 'text',
+              text: "".concat(prompt, "\n\nDocument text:\n").concat(limText)
+            }];
+          case 4:
+            _context12.n = 5;
+            return fetch('https://api.anthropic.com/v1/messages', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                model: 'claude-sonnet-4-20250514',
+                max_tokens: 1500,
+                messages: [{
+                  role: 'user',
+                  content: messageContent
+                }]
+              })
+            });
+          case 5:
+            res = _context12.v;
+            _context12.n = 6;
+            return res.json();
+          case 6:
+            data = _context12.v;
+            if (!data.error) {
+              _context12.n = 7;
+              break;
+            }
+            throw new Error(data.error.message || 'API error');
+          case 7:
+            raw = ((_data$content3 = data.content) === null || _data$content3 === void 0 || (_data$content3 = _data$content3[0]) === null || _data$content3 === void 0 || (_data$content3 = _data$content3.text) === null || _data$content3 === void 0 ? void 0 : _data$content3.replace(/```json|```/g, '').trim()) || '{}';
+            ex = JSON.parse(raw); // Apply to generalInfo
+            _gi = JSON.parse(JSON.stringify(cur.generalInfo || blankGeneralInfo()));
+            if (ex.address) {
+              _gi.address.asPerTitle = ex.address.asPerTitle || _gi.address.asPerTitle;
+              _gi.address.alsoKnownAs = ex.address.alsoKnownAs || _gi.address.alsoKnownAs;
+              _gi.address.legalDescription = ex.address.legalDescription || _gi.address.legalDescription;
+              _gi.address.titleRef = ex.address.titleRef || _gi.address.titleRef;
+              _gi.address.territorialAuthority = ex.address.territorialAuthority || _gi.address.territorialAuthority;
+              _gi.address.limDate = ex.address.limDate || _gi.address.limDate;
+            }
+            if ((_ex$tenure = ex.tenure) !== null && _ex$tenure !== void 0 && _ex$tenure.type) {
+              _gi.tenure.type = ex.tenure.type;
+              _gi.tenure.designation = ex.tenure.designation || '';
+              _gi.tenure.otherUnits = ex.tenure.otherUnits || '';
+              _gi.tenure.sharedLand = ex.tenure.sharedLand || '';
+              _gi.tenure.source = 'LIM';
+            }
+            if ((_ex$age = ex.age) !== null && _ex$age !== void 0 && _ex$age.mode && ex.age.mode !== 'undetermined') {
+              _gi.age.mode = ex.age.mode;
+              _gi.age.yearBuilt = ex.age.yearBuilt || '';
+              _gi.age.decade = ex.age.decade || '';
+              _gi.age.basisOfEstimate = 'Council record (LIM)';
+              _gi.age.source = 'LIM';
+            }
+            ['cladding', 'construction', 'roof', 'foundation'].forEach(function (k) {
+              var _ex$characteristics;
+              var items = (_ex$characteristics = ex.characteristics) === null || _ex$characteristics === void 0 ? void 0 : _ex$characteristics[k];
+              if ((items === null || items === void 0 ? void 0 : items.length) > 0 && items[0].type) {
+                _gi.characteristics[k] = items.map(function (e) {
+                  return {
+                    id: gid(),
+                    type: e.type || '',
+                    typeOther: '',
+                    area: e.area || '',
+                    source: 'LIM'
+                  };
+                });
+              }
+            });
+            if (ex.zones) {
+              ['climate', 'exposure', 'wind', 'eq'].forEach(function (k) {
+                if (ex.zones[k]) {
+                  _gi.zones[k] = ex.zones[k];
+                  _gi.zones[k + 'Source'] = 'LIM';
+                }
+              });
+            }
+            if (((_ex$alterations = ex.alterations) === null || _ex$alterations === void 0 ? void 0 : _ex$alterations.length) > 0 && ex.alterations[0].description) {
+              existingNos = new Set((_gi.alterations || []).map(function (a) {
+                return a.consentNo;
+              }).filter(Boolean));
+              newAlts = ex.alterations.filter(function (a) {
+                return a.description && (!a.consentNo || !existingNos.has(a.consentNo));
+              }).map(function (a) {
+                return _objectSpread(_objectSpread({}, blankAlt()), {}, {
+                  id: gid(),
+                  year: a.year || '',
+                  consentNo: a.consentNo || '',
+                  description: a.description || '',
+                  consentStatus: a.consentStatus || 'Not determined',
+                  source: 'LIM'
+                });
+              });
+              _gi.alterations = [].concat(_toConsumableArray(_gi.alterations || []), _toConsumableArray(newAlts));
+            }
+            updates = {
+              generalInfo: _gi
+            };
+            if ((_ex$address = ex.address) !== null && _ex$address !== void 0 && _ex$address.asPerTitle) updates.insp = _objectSpread(_objectSpread({}, cur.insp), {}, {
+              address: ex.address.asPerTitle
+            });
+            _context12.n = 8;
+            return saveInspection(_objectSpread(_objectSpread({}, cur), updates));
+          case 8:
+            setLimText('');
+            setLimPdfFile(null);
+            if (limPdfRef.current) limPdfRef.current.value = '';
+            setShowLimModal(false);
+            filled = Object.values(ex.address || {}).filter(Boolean).length + ((_ex$tenure2 = ex.tenure) !== null && _ex$tenure2 !== void 0 && _ex$tenure2.type ? 1 : 0) + ((_ex$age2 = ex.age) !== null && _ex$age2 !== void 0 && _ex$age2.mode && ex.age.mode !== 'undetermined' ? 1 : 0) + ['cladding', 'construction', 'roof', 'foundation'].filter(function (k) {
+              var _ex$characteristics2;
+              return (_ex$characteristics2 = ex.characteristics) === null || _ex$characteristics2 === void 0 || (_ex$characteristics2 = _ex$characteristics2[k]) === null || _ex$characteristics2 === void 0 || (_ex$characteristics2 = _ex$characteristics2[0]) === null || _ex$characteristics2 === void 0 ? void 0 : _ex$characteristics2.type;
+            }).length + (((_ex$alterations2 = ex.alterations) === null || _ex$alterations2 === void 0 || (_ex$alterations2 = _ex$alterations2.filter(function (a) {
+              return a.description;
+            })) === null || _ex$alterations2 === void 0 ? void 0 : _ex$alterations2.length) || 0);
+            showToast("\u2705 AI\uAC00 ".concat(filled, "\uAC1C \uD56D\uBAA9\uC744 \uCD94\uCD9C\uD588\uC2B5\uB2C8\uB2E4"));
+            _context12.n = 10;
+            break;
+          case 9:
+            _context12.p = 9;
+            _t12 = _context12.v;
+            console.error('AI LIM error:', _t12);
+            showToast('AI 오류: ' + _t12.message, 'error');
+          case 10:
+            setAiLimLoading(false);
+          case 11:
+            return _context12.a(2);
+        }
+      }, _callee12, null, [[1, 9]]);
+    }));
+    return _aiFromLIM.apply(this, arguments);
+  }
   function exportJSON() {
     if (!cur) return;
     var exportData = {
@@ -2505,29 +2714,29 @@ function App() {
     return _importJSON.apply(this, arguments);
   } // ── Generate Word Document ──────────────────────────────────
   function _importJSON() {
-    _importJSON = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee11(file) {
-      var _imported$insp, text, data, imported, photoCount, _t12;
-      return _regenerator().w(function (_context11) {
-        while (1) switch (_context11.p = _context11.n) {
+    _importJSON = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee13(file) {
+      var _imported$insp, text, data, imported, photoCount, _t13;
+      return _regenerator().w(function (_context13) {
+        while (1) switch (_context13.p = _context13.n) {
           case 0:
-            _context11.p = 0;
-            _context11.n = 1;
+            _context13.p = 0;
+            _context13.n = 1;
             return file.text();
           case 1:
-            text = _context11.v;
+            text = _context13.v;
             data = JSON.parse(text);
             if (!(!data.wwwExportVersion || !data.inspection)) {
-              _context11.n = 2;
+              _context13.n = 2;
               break;
             }
             showToast('Invalid export file', 'error');
-            return _context11.a(2);
+            return _context13.a(2);
           case 2:
             imported = _objectSpread(_objectSpread({}, data.inspection), {}, {
               _importedAt: new Date().toISOString(),
               _importedFrom: data.exportedFrom
             });
-            _context11.n = 3;
+            _context13.n = 3;
             return dbPut('inspections', imported);
           case 3:
             setList(function (prev) {
@@ -2543,16 +2752,16 @@ function App() {
               return acc + (((_d$photos3 = d.photos) === null || _d$photos3 === void 0 ? void 0 : _d$photos3.length) || 0);
             }, 0);
             showToast("\u2705 Imported: ".concat(((_imported$insp = imported.insp) === null || _imported$insp === void 0 ? void 0 : _imported$insp.address) || 'No address').concat(photoCount > 0 ? " \u2014 ".concat(photoCount, " photo(s) need re-attaching") : ''));
-            _context11.n = 5;
+            _context13.n = 5;
             break;
           case 4:
-            _context11.p = 4;
-            _t12 = _context11.v;
-            showToast('Import failed: ' + _t12.message, 'error');
+            _context13.p = 4;
+            _t13 = _context13.v;
+            showToast('Import failed: ' + _t13.message, 'error');
           case 5:
-            return _context11.a(2);
+            return _context13.a(2);
         }
-      }, _callee11, null, [[0, 4]]);
+      }, _callee13, null, [[0, 4]]);
     }));
     return _importJSON.apply(this, arguments);
   }
@@ -2560,22 +2769,22 @@ function App() {
     return _generateWord.apply(this, arguments);
   } // ── Counts ──────────────────────────────────────────────────
   function _generateWord() {
-    _generateWord = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee12() {
-      var docxLib, Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, AlignmentType, BorderStyle, WidthType, ShadingType, PageBreak, TEAL, LTEAL, BTEAL, RED, LRED, ORANGE, LORANGE, YELLOW, LYELLOW, GRAY, LGRAY, BLACK, gradeColors, bLine, allB, noB, r, rb, h1P, h2P, p, gap, pb, infoTbl, defectBlock, flagged, sigDef, maintDef, detDef, allReadings, ctrlVal, mCls, ch, keyDefs, wtCol, wtBg, filledWTF, doc, blob, url, a, _t13;
-      return _regenerator().w(function (_context12) {
-        while (1) switch (_context12.p = _context12.n) {
+    _generateWord = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee14() {
+      var docxLib, _cur$generalInfo3, _cur$generalInfo4, Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, AlignmentType, BorderStyle, WidthType, ShadingType, PageBreak, TEAL, LTEAL, BTEAL, RED, LRED, ORANGE, LORANGE, YELLOW, LYELLOW, GRAY, LGRAY, BLACK, gradeColors, bLine, allB, noB, r, rb, h1P, h2P, p, gap, pb, infoTbl, defectBlock, flagged, sigDef, maintDef, detDef, allReadings, ctrlVal, mCls, ch, keyDefs, wtCol, wtBg, filledWTF, doc, blob, url, a, _t14;
+      return _regenerator().w(function (_context14) {
+        while (1) switch (_context14.p = _context14.n) {
           case 0:
             docxLib = window.docx;
             if (docxLib) {
-              _context12.n = 1;
+              _context14.n = 1;
               break;
             }
             showToast('Word library loading — please refresh', 'error');
-            return _context12.a(2);
+            return _context14.a(2);
           case 1:
             setWordGenerating(true);
             showToast('⏳ Generating Word document…');
-            _context12.p = 2;
+            _context14.p = 2;
             Document = docxLib.Document, Packer = docxLib.Packer, Paragraph = docxLib.Paragraph, TextRun = docxLib.TextRun, Table = docxLib.Table, TableRow = docxLib.TableRow, TableCell = docxLib.TableCell, AlignmentType = docxLib.AlignmentType, BorderStyle = docxLib.BorderStyle, WidthType = docxLib.WidthType, ShadingType = docxLib.ShadingType, PageBreak = docxLib.PageBreak; // ── Color palette ──
             TEAL = "0A7C6B", LTEAL = "E8F5F3", BTEAL = "00BCD4";
             RED = "C62828", LRED = "FFEBEE";
@@ -2712,10 +2921,10 @@ function App() {
                   type: WidthType.DXA
                 },
                 columnWidths: [2800, 6226],
-                rows: rows.map(function (_ref37, i) {
-                  var _ref38 = _slicedToArray(_ref37, 2),
-                    lbl = _ref38[0],
-                    val = _ref38[1];
+                rows: rows.map(function (_ref40, i) {
+                  var _ref41 = _slicedToArray(_ref40, 2),
+                    lbl = _ref41[0],
+                    val = _ref41[1];
                   return new TableRow({
                     children: [new TableCell({
                       width: {
@@ -2928,11 +3137,11 @@ function App() {
                 })]
               });
             }; // ── Build flagged list ──
-            flagged = flaggedItems.map(function (_ref39) {
+            flagged = flaggedItems.map(function (_ref42) {
               var _catObj$label;
-              var _ref40 = _slicedToArray(_ref39, 2),
-                itemId = _ref40[0],
-                d = _ref40[1];
+              var _ref43 = _slicedToArray(_ref42, 2),
+                itemId = _ref43[0],
+                d = _ref43[1];
               var catObj = CATS.find(function (c) {
                 return c.items.find(function (i) {
                   return i.id === itemId;
@@ -3041,12 +3250,12 @@ function App() {
                 size: 40,
                 color: BLACK
               })]
-            }), gap(200), infoTbl([["Property Address", cur.insp.address || "—"], ["Client", cur.client.name || "—"], ["Date of Inspection", "".concat(fmtDate(cur.insp.date), " at ").concat(cur.insp.time || "—")], ["File Number", cur.fileNo || "—"], ["Scope", cur.insp.scope || "—"], ["Inspector", cur.insp.inspector || "—"], ["Qualifications", cur.insp.qualifications || "—"]]), gap(300), pb());
+            }), gap(200), infoTbl([["Property Address", ((_cur$generalInfo3 = cur.generalInfo) === null || _cur$generalInfo3 === void 0 || (_cur$generalInfo3 = _cur$generalInfo3.address) === null || _cur$generalInfo3 === void 0 ? void 0 : _cur$generalInfo3.asPerTitle) || cur.insp.address || "—"], ["Client", cur.client.name || "—"], ["Date of Inspection", "".concat(fmtDate(cur.insp.date), " at ").concat(cur.insp.time || "—")], ["File Number", cur.fileNo || "—"], ["Scope", cur.insp.scope || "—"], ["Inspector", cur.insp.inspector || "—"], ["Qualifications", cur.insp.qualifications || "—"]]), gap(300), pb());
 
             // ══ GENERAL INFORMATION ═══════════════════════════════════
             ch.push(h1P("General Information"), gap(60));
             ch.push(h2P("Property & Inspection Details"));
-            ch.push(infoTbl([["Property Address", cur.insp.address || "—"], ["Date of Inspection", fmtDate(cur.insp.date)], ["Time of Inspection", cur.insp.time || "—"], ["Scope of Inspection", cur.insp.scope || "—"], ["Weather Conditions", cur.insp.weather || "—"], ["Ground Conditions", cur.insp.soil || "—"], ["Occupancy Status", cur.insp.occupancy || "—"], ["People Present", cur.insp.people || "—"], ["Areas Not Inspected", cur.insp.areasNotInspected || "—"]]));
+            ch.push(infoTbl([["Property Address", ((_cur$generalInfo4 = cur.generalInfo) === null || _cur$generalInfo4 === void 0 || (_cur$generalInfo4 = _cur$generalInfo4.address) === null || _cur$generalInfo4 === void 0 ? void 0 : _cur$generalInfo4.asPerTitle) || cur.insp.address || "—"], ["Date of Inspection", fmtDate(cur.insp.date)], ["Time of Inspection", cur.insp.time || "—"], ["Scope of Inspection", cur.insp.scope || "—"], ["Weather Conditions", cur.insp.weather || "—"], ["Ground Conditions", cur.insp.soil || "—"], ["Occupancy Status", cur.insp.occupancy || "—"], ["People Present", cur.insp.people || "—"], ["Areas Not Inspected", cur.insp.areasNotInspected || "—"]]));
             ch.push(gap());
             ch.push(h2P("Client Information"));
             ch.push(infoTbl([["Client Name", cur.client.name || "—"], ["Phone", cur.client.phone || "—"], ["Email", cur.client.email || "—"], ["Report Delivery", cur.client.delivery || "—"], ["Payment Status", cur.client.payment || "—"]]));
@@ -3065,12 +3274,12 @@ function App() {
               },
               columnWidths: [3008, 3009, 3009],
               rows: [new TableRow({
-                children: keyDefs.map(function (_ref41) {
-                  var _ref42 = _slicedToArray(_ref41, 4),
-                    lbl = _ref42[0],
-                    col = _ref42[1],
-                    bg = _ref42[2],
-                    desc = _ref42[3];
+                children: keyDefs.map(function (_ref44) {
+                  var _ref45 = _slicedToArray(_ref44, 4),
+                    lbl = _ref45[0],
+                    col = _ref45[1],
+                    bg = _ref45[2],
+                    desc = _ref45[3];
                   return new TableCell({
                     borders: _objectSpread(_objectSpread({}, noB()), {}, {
                       left: {
@@ -3643,10 +3852,10 @@ function App() {
                 children: ch
               }]
             });
-            _context12.n = 3;
+            _context14.n = 3;
             return Packer.toBlob(doc);
           case 3:
-            blob = _context12.v;
+            blob = _context14.v;
             url = URL.createObjectURL(blob);
             a = document.createElement('a');
             a.href = url;
@@ -3658,19 +3867,19 @@ function App() {
               return URL.revokeObjectURL(url);
             }, 2000);
             showToast('📄 Word document saved to Downloads ✓');
-            _context12.n = 5;
+            _context14.n = 5;
             break;
           case 4:
-            _context12.p = 4;
-            _t13 = _context12.v;
-            console.error('Word generation error:', _t13);
-            showToast('Word error: ' + _t13.message, 'error');
+            _context14.p = 4;
+            _t14 = _context14.v;
+            console.error('Word generation error:', _t14);
+            showToast('Word error: ' + _t14.message, 'error');
           case 5:
             setWordGenerating(false);
           case 6:
-            return _context12.a(2);
+            return _context14.a(2);
         }
-      }, _callee12, null, [[2, 4]]);
+      }, _callee14, null, [[2, 4]]);
     }));
     return _generateWord.apply(this, arguments);
   }
@@ -3698,7 +3907,7 @@ function App() {
 
   // ── Shared layout ────────────────────────────────────────────
   var Layout = function Layout(_ref16) {
-    var _cur$insp, _cur$wt;
+    var _cur$generalInfo, _cur$insp, _cur$generalInfo2, _cur$wt;
     var title = _ref16.title,
       children = _ref16.children;
     return /*#__PURE__*/React.createElement("div", {
@@ -3780,7 +3989,7 @@ function App() {
         fontWeight: 700,
         color: C.white
       }
-    }, title), (cur === null || cur === void 0 || (_cur$insp = cur.insp) === null || _cur$insp === void 0 ? void 0 : _cur$insp.address) && /*#__PURE__*/React.createElement("div", {
+    }, title), ((cur === null || cur === void 0 || (_cur$generalInfo = cur.generalInfo) === null || _cur$generalInfo === void 0 || (_cur$generalInfo = _cur$generalInfo.address) === null || _cur$generalInfo === void 0 ? void 0 : _cur$generalInfo.asPerTitle) || (cur === null || cur === void 0 || (_cur$insp = cur.insp) === null || _cur$insp === void 0 ? void 0 : _cur$insp.address)) && /*#__PURE__*/React.createElement("div", {
       style: {
         fontSize: 11,
         color: C.teal,
@@ -3789,7 +3998,7 @@ function App() {
         textOverflow: 'ellipsis',
         whiteSpace: 'nowrap'
       }
-    }, cur.insp.address)), /*#__PURE__*/React.createElement("div", {
+    }, ((_cur$generalInfo2 = cur.generalInfo) === null || _cur$generalInfo2 === void 0 || (_cur$generalInfo2 = _cur$generalInfo2.address) === null || _cur$generalInfo2 === void 0 ? void 0 : _cur$generalInfo2.asPerTitle) || cur.insp.address)), /*#__PURE__*/React.createElement("div", {
       style: {
         display: 'flex',
         alignItems: 'center',
@@ -4440,17 +4649,267 @@ function App() {
         fontSize: 12,
         color: '#8B5E00'
       }
-    }, "\u26A0 Building characteristics from an earlier version have been marked 'Assumed'. Please review and confirm."), /*#__PURE__*/React.createElement("div", {
+    }, "\u26A0 Building characteristics from an earlier version have been marked 'Assumed'. Please review and confirm."), /*#__PURE__*/React.createElement("button", {
+      onClick: function onClick() {
+        return setShowLimModal(true);
+      },
+      style: {
+        width: '100%',
+        background: '#EDE9FF',
+        color: C.primary,
+        border: "1.5px solid ".concat(C.primary),
+        borderRadius: 10,
+        padding: '12px 20px',
+        fontSize: 14,
+        fontWeight: 700,
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        marginBottom: 14
+      }
+    }, "\u2728 AI Fill from LIM / Document"), showLimModal && /*#__PURE__*/React.createElement("div", {
+      style: {
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0,0,0,.65)',
+        zIndex: 300,
+        display: 'flex',
+        alignItems: 'flex-end',
+        justifyContent: 'center'
+      },
+      onClick: function onClick(e) {
+        if (e.target === e.currentTarget) {
+          setShowLimModal(false);
+          setLimText('');
+        }
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: C.white,
+        width: '100%',
+        maxWidth: 480,
+        borderRadius: '16px 16px 0 0',
+        padding: 20,
+        maxHeight: '85vh',
+        overflowY: 'auto'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 10
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontWeight: 700,
+        fontSize: 16,
+        color: C.txt
+      }
+    }, "\u2728 AI Fill from LIM"), /*#__PURE__*/React.createElement("button", {
+      onClick: function onClick() {
+        setShowLimModal(false);
+        setLimText('');
+      },
+      style: {
+        background: 'none',
+        border: 'none',
+        fontSize: 20,
+        cursor: 'pointer',
+        color: C.txt2
+      }
+    }, "\u2715")), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        color: C.txt2,
+        marginBottom: 14,
+        lineHeight: 1.6
+      }
+    }, "LIM PDF\uB97C \uC5C5\uB85C\uB4DC\uD558\uAC70\uB098 \uD14D\uC2A4\uD2B8\uB97C \uBD99\uC5EC\uB123\uC73C\uC138\uC694. AI\uAC00 \uC8FC\uC18C, Tenure, \uAC74\uCD95\uC5F0\uB3C4, \uD074\uB798\uB529, Consent \uAE30\uB85D \uB4F1\uC744 \uC790\uB3D9 \uCD94\uCD9C\uD569\uB2C8\uB2E4. Source\uB294 \"LIM\"\uC73C\uB85C \uC124\uC815\uB429\uB2C8\uB2E4."), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        gap: 8,
+        marginBottom: 16
+      }
+    }, [['pdf', '📄 PDF 업로드'], ['text', '📋 텍스트 붙여넣기']].map(function (_ref21) {
+      var _ref22 = _slicedToArray(_ref21, 2),
+        mode = _ref22[0],
+        label = _ref22[1];
+      return /*#__PURE__*/React.createElement("button", {
+        key: mode,
+        onClick: function onClick() {
+          return setLimInputMode(mode);
+        },
+        style: {
+          flex: 1,
+          padding: '9px',
+          borderRadius: 8,
+          border: "2px solid ".concat(limInputMode === mode ? C.primary : C.border),
+          background: limInputMode === mode ? '#EDE9FF' : C.white,
+          color: limInputMode === mode ? C.primary : C.txt2,
+          fontWeight: limInputMode === mode ? 700 : 400,
+          fontSize: 13,
+          cursor: 'pointer'
+        }
+      }, label);
+    })), limInputMode === 'pdf' && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("input", {
+      ref: limPdfRef,
+      type: "file",
+      accept: "application/pdf,.pdf",
+      style: {
+        display: 'none'
+      },
+      onChange: (/*#__PURE__*/function () {
+        var _ref23 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee2(e) {
+          var _e$target$files;
+          var file;
+          return _regenerator().w(function (_context2) {
+            while (1) switch (_context2.n) {
+              case 0:
+                file = (_e$target$files = e.target.files) === null || _e$target$files === void 0 ? void 0 : _e$target$files[0];
+                if (file) {
+                  _context2.n = 1;
+                  break;
+                }
+                return _context2.a(2);
+              case 1:
+                if (!(file.size > 10 * 1024 * 1024)) {
+                  _context2.n = 2;
+                  break;
+                }
+                showToast('PDF는 10MB 이하여야 합니다', 'error');
+                return _context2.a(2);
+              case 2:
+                setLimPdfFile(file);
+              case 3:
+                return _context2.a(2);
+            }
+          }, _callee2);
+        }));
+        return function (_x22) {
+          return _ref23.apply(this, arguments);
+        };
+      }())
+    }), !limPdfFile ? /*#__PURE__*/React.createElement("button", {
+      onClick: function onClick() {
+        return limPdfRef.current.click();
+      },
+      style: {
+        width: '100%',
+        padding: '40px 20px',
+        border: "2px dashed ".concat(C.primary),
+        borderRadius: 12,
+        background: '#F8F6FF',
+        color: C.primary,
+        fontSize: 15,
+        fontWeight: 600,
+        cursor: 'pointer',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 10
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 40
+      }
+    }, "\uD83D\uDCC4"), /*#__PURE__*/React.createElement("span", null, "LIM PDF \uD30C\uC77C \uC120\uD0DD"), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 11,
+        color: C.txt2,
+        fontWeight: 400
+      }
+    }, "\uCD5C\uB300 10MB \xB7 PDF \uD615\uC2DD")) : /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: '#F8F6FF',
+        border: "1.5px solid ".concat(C.primary),
+        borderRadius: 10,
+        padding: '12px 16px',
+        marginBottom: 12
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center'
+      }
+    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 13,
+        fontWeight: 700,
+        color: C.txt
+      }
+    }, "\uD83D\uDCC4 ", limPdfFile.name), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 11,
+        color: C.txt2,
+        marginTop: 2
+      }
+    }, (limPdfFile.size / 1024).toFixed(0), " KB")), /*#__PURE__*/React.createElement("button", {
+      onClick: function onClick() {
+        setLimPdfFile(null);
+        limPdfRef.current.value = '';
+      },
+      style: {
+        background: 'none',
+        border: 'none',
+        color: C.danger,
+        cursor: 'pointer',
+        fontSize: 18
+      }
+    }, "\u2715")))), limInputMode === 'text' && /*#__PURE__*/React.createElement("textarea", {
+      style: _objectSpread(_objectSpread({}, inp), {}, {
+        minHeight: 160,
+        resize: 'none',
+        marginBottom: 4,
+        fontSize: 13
+      }),
+      value: limText,
+      onChange: function onChange(e) {
+        return setLimText(e.target.value);
+      },
+      placeholder: "\uC5EC\uAE30\uC5D0 LIM \uD14D\uC2A4\uD2B8\uB97C \uBD99\uC5EC\uB123\uC73C\uC138\uC694..."
+    }), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 11,
+        color: C.txt2,
+        margin: '10px 0 14px',
+        background: C.bg,
+        padding: '8px 12px',
+        borderRadius: 8,
+        lineHeight: 1.5
+      }
+    }, "\uD83D\uDCA1 \uCD94\uCD9C: \uC8FC\uC18C \xB7 Legal description \xB7 CT\uBC88\uD638 \xB7 LIM \uB0A0\uC9DC \xB7 Tenure \xB7 \uAC74\uCD95\uC5F0\uB3C4/\uC5F0\uB300 \xB7 Cladding \xB7 Construction \xB7 Roof \xB7 Foundation \xB7 Alteration/Consent \uAE30\uB85D \xB7 Zones"), /*#__PURE__*/React.createElement("button", {
+      onClick: aiFromLIM,
+      disabled: aiLimLoading || (limInputMode === 'pdf' ? !limPdfFile : !limText.trim()),
+      style: {
+        width: '100%',
+        background: aiLimLoading || (limInputMode === 'pdf' ? !limPdfFile : !limText.trim()) ? '#B0B7C3' : C.teal,
+        color: '#fff',
+        border: 'none',
+        borderRadius: 8,
+        padding: 13,
+        fontSize: 14,
+        fontWeight: 700,
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8
+      }
+    }, aiLimLoading ? '⏳ AI가 분석 중…' : '✨ 필드 자동 입력'))), /*#__PURE__*/React.createElement("div", {
       style: {
         display: 'flex',
         gap: 8,
         marginBottom: 14
       }
-    }, [["".concat(prog, "%"), 'Complete', C.primary], [flagN, 'Defects', flagN > 0 ? C.danger : C.done], [assumedCount, 'Assumed/ND', assumedCount > 0 ? AMBER_IND : C.txt2], ["".concat(doneN, "/").concat(CATS.length), 'Sections', C.teal]].map(function (_ref21) {
-      var _ref22 = _slicedToArray(_ref21, 3),
-        v = _ref22[0],
-        l = _ref22[1],
-        cl = _ref22[2];
+    }, [["".concat(prog, "%"), 'Complete', C.primary], [flagN, 'Defects', flagN > 0 ? C.danger : C.done], [assumedCount, 'Assumed/ND', assumedCount > 0 ? AMBER_IND : C.txt2], ["".concat(doneN, "/").concat(CATS.length), 'Sections', C.teal]].map(function (_ref24) {
+      var _ref25 = _slicedToArray(_ref24, 3),
+        v = _ref25[0],
+        l = _ref25[1],
+        cl = _ref25[2];
       return /*#__PURE__*/React.createElement("div", {
         key: l,
         style: {
@@ -4573,10 +5032,10 @@ function App() {
       onBlur: function onBlur(e) {
         updGI(['address', 'limDate'], e.target.value);
         if (e.target.value) {
-          var limText = "The LIM relied upon is dated ".concat(e.target.value, " and does not record any activity after that date.");
+          var _limText = "The LIM relied upon is dated ".concat(e.target.value, " and does not record any activity after that date.");
           var existing = gi.scopeLimitations || '';
           if (!existing.includes('LIM relied upon')) {
-            updGI(['scopeLimitations'], existing ? existing + '\n\n' + limText : limText);
+            updGI(['scopeLimitations'], existing ? existing + '\n\n' + _limText : _limText);
           }
         }
       },
@@ -4638,11 +5097,11 @@ function App() {
       }
     })), /*#__PURE__*/React.createElement(Card, {
       key: "client-".concat(cur.id)
-    }, /*#__PURE__*/React.createElement(SecTitle, null, "Client Information"), [['name', 'Client Name', true], ['phone', 'Phone'], ['email', 'Email'], ['address', 'Client Address']].map(function (_ref23) {
-      var _ref24 = _slicedToArray(_ref23, 3),
-        k = _ref24[0],
-        lb = _ref24[1],
-        req = _ref24[2];
+    }, /*#__PURE__*/React.createElement(SecTitle, null, "Client Information"), [['name', 'Client Name', true], ['phone', 'Phone'], ['email', 'Email'], ['address', 'Client Address']].map(function (_ref26) {
+      var _ref27 = _slicedToArray(_ref26, 3),
+        k = _ref27[0],
+        lb = _ref27[1],
+        req = _ref27[2];
       return /*#__PURE__*/React.createElement(FRow, {
         key: k,
         label: lb,
@@ -4808,11 +5267,11 @@ function App() {
         display: 'flex',
         gap: 8
       }
-    }, [['year', 'Year Built'], ['decade', 'Decade'], ['undetermined', 'Not determined']].map(function (_ref25) {
+    }, [['year', 'Year Built'], ['decade', 'Decade'], ['undetermined', 'Not determined']].map(function (_ref28) {
       var _gi$age4, _gi$age5, _gi$age6, _gi$age7;
-      var _ref26 = _slicedToArray(_ref25, 2),
-        m = _ref26[0],
-        lbl = _ref26[1];
+      var _ref29 = _slicedToArray(_ref28, 2),
+        m = _ref29[0],
+        lbl = _ref29[1];
       return /*#__PURE__*/React.createElement("button", {
         key: m,
         onClick: function onClick() {
@@ -5030,13 +5489,13 @@ function App() {
         fontWeight: 600,
         cursor: 'pointer'
       }
-    }, "+ Add alteration"))), /*#__PURE__*/React.createElement(Card, null, /*#__PURE__*/React.createElement(SecTitle, null, "Site Exposure & Zones (Item 10)"), [['Climate Zone', 'climate', 'climateSource', ZONE_CLIMATE], ['Exposure Zone', 'exposure', 'exposureSource', ZONE_EXPOSURE], ['Wind Zone', 'wind', 'windSource', ZONE_WIND], ['Earthquake Zone', 'eq', 'eqSource', ZONE_EQ]].map(function (_ref27) {
+    }, "+ Add alteration"))), /*#__PURE__*/React.createElement(Card, null, /*#__PURE__*/React.createElement(SecTitle, null, "Site Exposure & Zones (Item 10)"), [['Climate Zone', 'climate', 'climateSource', ZONE_CLIMATE], ['Exposure Zone', 'exposure', 'exposureSource', ZONE_EXPOSURE], ['Wind Zone', 'wind', 'windSource', ZONE_WIND], ['Earthquake Zone', 'eq', 'eqSource', ZONE_EQ]].map(function (_ref30) {
       var _gi$zones5, _gi$zones6, _gi$zones7;
-      var _ref28 = _slicedToArray(_ref27, 4),
-        lbl = _ref28[0],
-        fld = _ref28[1],
-        srcFld = _ref28[2],
-        opts = _ref28[3];
+      var _ref31 = _slicedToArray(_ref30, 4),
+        lbl = _ref31[0],
+        fld = _ref31[1],
+        srcFld = _ref31[2],
+        opts = _ref31[3];
       return /*#__PURE__*/React.createElement("div", {
         key: fld,
         style: _objectSpread({
@@ -5826,11 +6285,11 @@ function App() {
             accentColor: C.txt2
           },
           onChange: (/*#__PURE__*/function () {
-            var _ref29 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee2(e) {
+            var _ref32 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee3(e) {
               var _d$recommendation;
               var axes, patch;
-              return _regenerator().w(function (_context2) {
-                while (1) switch (_context2.n) {
+              return _regenerator().w(function (_context3) {
+                while (1) switch (_context3.n) {
                   case 0:
                     axes = e.target.checked ? [].concat(_toConsumableArray(d.axes || []), [ax.id]) : (d.axes || []).filter(function (a) {
                       return a !== ax.id;
@@ -5841,15 +6300,15 @@ function App() {
                     if (ax.id === 'further_investigation' && e.target.checked && !((_d$recommendation = d.recommendation) !== null && _d$recommendation !== void 0 && _d$recommendation.includes('Further investigation'))) {
                       patch.recommendation = (d.recommendation || '') + (d.recommendation ? ' ' : '') + 'Further investigation by a specialist is recommended.';
                     }
-                    _context2.n = 1;
+                    _context3.n = 1;
                     return updItem(item.id, patch);
                   case 1:
-                    return _context2.a(2);
+                    return _context3.a(2);
                 }
-              }, _callee2);
+              }, _callee3);
             }));
-            return function (_x22) {
-              return _ref29.apply(this, arguments);
+            return function (_x23) {
+              return _ref32.apply(this, arguments);
             };
           }())
         }), ax.label);
@@ -6035,11 +6494,11 @@ function App() {
         gap: 8,
         marginBottom: 14
       }
-    }, [["".concat(prog, "%"), 'Progress', C.primary], [flagN, 'Flagged', flagN > 0 ? C.danger : C.done], [sigN, 'Significant', sigN > 0 ? '#C62828' : C.txt2], [incompleteN, 'Incomplete', incompleteN > 0 ? C.amber : C.txt2]].map(function (_ref30) {
-      var _ref31 = _slicedToArray(_ref30, 3),
-        v = _ref31[0],
-        l = _ref31[1],
-        cl = _ref31[2];
+    }, [["".concat(prog, "%"), 'Progress', C.primary], [flagN, 'Flagged', flagN > 0 ? C.danger : C.done], [sigN, 'Significant', sigN > 0 ? '#C62828' : C.txt2], [incompleteN, 'Incomplete', incompleteN > 0 ? C.amber : C.txt2]].map(function (_ref33) {
+      var _ref34 = _slicedToArray(_ref33, 3),
+        v = _ref34[0],
+        l = _ref34[1],
+        cl = _ref34[2];
       return /*#__PURE__*/React.createElement("div", {
         key: l,
         style: {
@@ -6141,9 +6600,9 @@ function App() {
         color: cur.wt.rating === 'HIGH' ? '#C62828' : cur.wt.rating === 'MEDIUM' ? '#EF6C00' : C.done
       }
     }, cur.wt.rating, " RISK PROFILE")))), GRADES.map(function (g) {
-      var items = flaggedItems.filter(function (_ref32) {
-        var _ref33 = _slicedToArray(_ref32, 2),
-          d = _ref33[1];
+      var items = flaggedItems.filter(function (_ref35) {
+        var _ref36 = _slicedToArray(_ref35, 2),
+          d = _ref36[1];
         return d.grade === g.id;
       });
       if (!items.length) return null;
@@ -6154,10 +6613,10 @@ function App() {
         }
       }, /*#__PURE__*/React.createElement(SecTitle, {
         color: g.color
-      }, g.id === 'significant' ? '🔴' : g.id === 'maintenance' ? '🟠' : '🟡', " ", g.label, " (", items.length, ")"), items.map(function (_ref34) {
-        var _ref35 = _slicedToArray(_ref34, 2),
-          itemId = _ref35[0],
-          d = _ref35[1];
+      }, g.id === 'significant' ? '🔴' : g.id === 'maintenance' ? '🟠' : '🟡', " ", g.label, " (", items.length, ")"), items.map(function (_ref37) {
+        var _ref38 = _slicedToArray(_ref37, 2),
+          itemId = _ref38[0],
+          d = _ref38[1];
         var catObj = CATS.find(function (c) {
           return c.items.find(function (i) {
             return i.id === itemId;
@@ -6601,26 +7060,26 @@ function App() {
       placeholder: "Caption (required for report)",
       value: (photoRef === null || photoRef === void 0 ? void 0 : photoRef.caption) || '',
       onChange: (/*#__PURE__*/function () {
-        var _ref36 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee3(e) {
+        var _ref39 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee4(e) {
           var photos;
-          return _regenerator().w(function (_context3) {
-            while (1) switch (_context3.n) {
+          return _regenerator().w(function (_context4) {
+            while (1) switch (_context4.n) {
               case 0:
                 photos = _toConsumableArray(d.photos);
                 photos[photoMod.idx] = _objectSpread(_objectSpread({}, photos[photoMod.idx]), {}, {
                   caption: e.target.value
                 });
-                _context3.n = 1;
+                _context4.n = 1;
                 return updItem(photoMod.itemId, {
                   photos: photos
                 });
               case 1:
-                return _context3.a(2);
+                return _context4.a(2);
             }
-          }, _callee3);
+          }, _callee4);
         }));
-        return function (_x23) {
-          return _ref36.apply(this, arguments);
+        return function (_x24) {
+          return _ref39.apply(this, arguments);
         };
       }())
     }), /*#__PURE__*/React.createElement("button", {
