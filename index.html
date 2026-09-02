@@ -284,7 +284,7 @@ async function checkStorageQuota() {
 }
 
 // ─── CONSTANTS ───────────────────────────────────────────────
-const APP_VERSION = 'v3.5';
+const APP_VERSION = 'v3.6';
 const APP_DATE = '2026-09-02'; // Update this on each release
 const APP_VER_DISPLAY = `${APP_VERSION} · ${APP_DATE}`;
 const ST = {
@@ -933,6 +933,7 @@ function blankInspection() {
       readings: []
     },
     items,
+    catPhotos: {},
     execSummary: '',
     notes: '',
     saveDevicePhotos: true // Phase A: default ON
@@ -1957,7 +1958,8 @@ function App() {
     if (fileRef.current) fileRef.current.value = '';
   }
   function onFileInput(e) {
-    handleFiles(e.target.files, pendingPhotoItem.current);
+    const t = pendingPhotoItem.current;
+    if (t?.catId) handleCatFiles(e.target.files, t.catId);else handleFiles(e.target.files, t);
   }
   async function deletePhoto(itemId, defectId, photoIdx) {
     const item = cur.items[itemId];
@@ -1970,6 +1972,126 @@ function App() {
     } : x);
     await updItem(itemId, {
       defects
+    });
+    setPhotoMod(null);
+    showToast('Photo deleted');
+  }
+
+  // ── Category overview photos ─────────────────────────────────
+  // Evidence that a category was inspected, independent of any defect.
+  // Labelled SITE-01, SUB-01… so Downloads filenames stay self-describing.
+  const CAT_CODE = {
+    site: 'SITE',
+    sub: 'SUB',
+    ext: 'EXT',
+    roof: 'ROOF',
+    roofspace: 'RSPACE',
+    int: 'INT',
+    kitchen: 'KIT',
+    bath: 'BATH',
+    laundry: 'LAU',
+    garage: 'GAR',
+    general: 'GEN',
+    moisture: 'MOIST',
+    thermal: 'THERM'
+  };
+  async function handleCatFiles(files, catId) {
+    if (!files?.length || !catId) return;
+    const code = CAT_CODE[catId] || catId.toUpperCase();
+    for (let i = 0; i < files.length; i++) {
+      try {
+        const blob = await compressImage(files[i]);
+        const ins = (await dbGet('inspections', cur.id)) || cur;
+        const existing = ins.catPhotos?.[catId]?.photos || [];
+        const photoId = gid();
+        const seq = existing.length + 1;
+        const photoLabel = `${code}-${String(seq).padStart(2, '0')}`;
+        const filename = photoFilename(ins.fileNo, photoLabel, seq);
+        const rec = {
+          photoId,
+          inspectionId: ins.id,
+          defectRef: photoLabel,
+          catId,
+          seq,
+          photoLabel,
+          blob,
+          caption: '',
+          savedToDevice: false,
+          saveStatus: 'pending',
+          createdAt: new Date().toISOString()
+        };
+        let saveStatus = 'ok';
+        try {
+          await dbPutVerified('photos', {
+            ...rec,
+            saveStatus: 'ok'
+          });
+        } catch {
+          saveStatus = 'fail';
+          showToast('🔴 Photo save to app failed — retry', 'error');
+        }
+        let savedToDevice = false;
+        if (ins.saveDevicePhotos) {
+          savedToDevice = saveToDevice(blob, filename);
+          if (!savedToDevice && saveStatus !== 'fail') saveStatus = 'partial';
+        }
+        await dbPut('photos', {
+          ...rec,
+          saveStatus,
+          savedToDevice
+        });
+        const ref = {
+          photoId,
+          photoLabel,
+          caption: '',
+          saveStatus,
+          savedToDevice
+        };
+        await saveInspection({
+          ...ins,
+          catPhotos: {
+            ...(ins.catPhotos || {}),
+            [catId]: {
+              photos: [...existing, ref]
+            }
+          }
+        });
+        showToast(savedToDevice ? `✅ ${photoLabel} saved + downloaded` : saveStatus === 'ok' ? `💾 ${photoLabel} saved to app` : '⚠️ Partial save — check', saveStatus === 'fail' ? 'error' : 'ok');
+      } catch (err) {
+        console.error('Category photo error:', err);
+        showToast('🔴 Photo error — please retry', 'error');
+      }
+    }
+    if (fileRef.current) fileRef.current.value = '';
+  }
+  function updCatPhoto(catId, idx, patch) {
+    const photos = (cur.catPhotos?.[catId]?.photos || []).map((p, n) => n === idx ? {
+      ...p,
+      ...patch
+    } : p);
+    return saveInspection({
+      ...cur,
+      catPhotos: {
+        ...(cur.catPhotos || {}),
+        [catId]: {
+          photos
+        }
+      }
+    });
+  }
+  async function deleteCatPhoto(catId, idx) {
+    const photos = [...(cur.catPhotos?.[catId]?.photos || [])];
+    const ref = photos[idx];
+    if (ref?.photoId) await dbDelete('photos', ref.photoId).catch(() => {});
+    photos.splice(idx, 1);
+    await saveInspection({
+      ...cur,
+      catPhotos: {
+        ...(cur.catPhotos || {}),
+        [catId]: {
+          photos
+        }
+      }
     });
     setPhotoMod(null);
     showToast('Photo deleted');
@@ -4087,7 +4209,129 @@ function App() {
         color: cs === ST.done ? C.done : cs === ST.na ? C.na : C.amber,
         border: `1px solid ${cs === ST.done ? C.done : cs === ST.na ? C.border : C.amber}`
       }
-    }, cs)), cat.items.map(item => {
+    }, cs)), (() => {
+      const catPhotos = cur.catPhotos?.[cat.id]?.photos || [];
+      return /*#__PURE__*/React.createElement(Card, {
+        style: {
+          border: `1px solid ${C.teal}`
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: 'flex',
+          alignItems: 'center',
+          marginBottom: 10
+        }
+      }, /*#__PURE__*/React.createElement(SecTitle, null, "Overview Photos"), /*#__PURE__*/React.createElement("div", {
+        style: {
+          flex: 1
+        }
+      }), catPhotos.length > 0 && /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontSize: 11,
+          fontWeight: 700,
+          color: C.teal,
+          marginTop: -12
+        }
+      }, catPhotos.length)), /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 11,
+          color: C.txt2,
+          marginBottom: 10,
+          lineHeight: 1.5
+        }
+      }, "General photos of ", cat.label.replace(/^\d+\.\s/, ''), " — evidence the area was inspected. Saved to Downloads as ", CAT_CODE[cat.id] || cat.id.toUpperCase(), "-01, -02…"), catPhotos.length > 0 && /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 8,
+          marginBottom: 10
+        }
+      }, catPhotos.map((ph, idx) => /*#__PURE__*/React.createElement("div", {
+        key: ph.photoId || idx,
+        style: {
+          position: 'relative'
+        }
+      }, /*#__PURE__*/React.createElement(PhotoThumb, {
+        photoRef: ph,
+        onClick: () => setPhotoMod({
+          catId: cat.id,
+          idx
+        })
+      }), /*#__PURE__*/React.createElement("button", {
+        onClick: e => {
+          e.stopPropagation();
+          deleteCatPhoto(cat.id, idx);
+        },
+        title: "Remove photo",
+        style: {
+          position: 'absolute',
+          top: -6,
+          right: -6,
+          width: 22,
+          height: 22,
+          borderRadius: '50%',
+          border: 'none',
+          background: C.danger,
+          color: '#fff',
+          fontSize: 12,
+          fontWeight: 700,
+          cursor: 'pointer',
+          lineHeight: 1,
+          boxShadow: '0 1px 4px rgba(0,0,0,.3)'
+        }
+      }, "✕"), /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 9,
+          fontFamily: 'monospace',
+          color: C.txt2,
+          textAlign: 'center',
+          marginTop: 2
+        }
+      }, ph.photoLabel)))), /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: 'flex',
+          gap: 6
+        }
+      }, /*#__PURE__*/React.createElement("button", {
+        onClick: () => {
+          pendingPhotoItem.current = {
+            catId: cat.id
+          };
+          fileRef.current.setAttribute('capture', 'environment');
+          fileRef.current.click();
+        },
+        style: {
+          flex: 1,
+          padding: '9px 11px',
+          borderRadius: 6,
+          border: `1px solid ${C.teal}`,
+          background: C.white,
+          color: C.teal,
+          fontSize: 12,
+          fontWeight: 600,
+          cursor: 'pointer'
+        }
+      }, "📷 Camera"), /*#__PURE__*/React.createElement("button", {
+        onClick: () => {
+          pendingPhotoItem.current = {
+            catId: cat.id
+          };
+          fileRef.current.removeAttribute('capture');
+          fileRef.current.click();
+        },
+        style: {
+          flex: 1,
+          padding: '9px 11px',
+          borderRadius: 6,
+          border: `1px solid ${C.teal}`,
+          background: C.white,
+          color: C.teal,
+          fontSize: 12,
+          fontWeight: 600,
+          cursor: 'pointer'
+        }
+      }, "🖼 Gallery")));
+    })(), cat.items.map(item => {
       const it = cur.items[item.id] || blankItem();
       const defects = it.defects || [];
       const expanded = it.status !== ST.pending || defects.length > 0;
@@ -4979,8 +5223,9 @@ function App() {
 
   // Photo modal
   if (photoMod && cur) {
-    const df = (cur.items[photoMod.itemId]?.defects || []).find(x => x.id === photoMod.defectId);
-    const photoRef = df?.photos?.[photoMod.idx];
+    const isCat = !!photoMod.catId;
+    const df = isCat ? null : (cur.items[photoMod.itemId]?.defects || []).find(x => x.id === photoMod.defectId);
+    const photoRef = isCat ? cur.catPhotos?.[photoMod.catId]?.photos?.[photoMod.idx] : df?.photos?.[photoMod.idx];
     return /*#__PURE__*/React.createElement("div", {
       style: {
         position: 'fixed',
@@ -5016,7 +5261,7 @@ function App() {
         fontSize: 12,
         marginTop: 10
       }
-    }, "Photo ", photoRef?.num, " · ", photoRef?.saveStatus === 'ok' ? '✅ Saved' : photoRef?.saveStatus === 'partial' ? '⚠️ Partial' : '🔴 Failed'), /*#__PURE__*/React.createElement("input", {
+    }, photoRef?.photoLabel || `Photo ${photoRef?.num}`, " · ", photoRef?.saveStatus === 'ok' ? '✅ Saved' : photoRef?.saveStatus === 'partial' ? '⚠️ Partial' : '🔴 Failed'), /*#__PURE__*/React.createElement("input", {
       style: {
         ...inp,
         width: 260,
@@ -5026,6 +5271,12 @@ function App() {
       placeholder: "Caption (required for report)",
       defaultValue: photoRef?.caption || '',
       onBlur: e => {
+        if (isCat) {
+          updCatPhoto(photoMod.catId, photoMod.idx, {
+            caption: e.target.value
+          });
+          return;
+        }
         const photos = df.photos.map((p, n) => n === photoMod.idx ? {
           ...p,
           caption: e.target.value
@@ -5035,7 +5286,7 @@ function App() {
         });
       }
     }), /*#__PURE__*/React.createElement("button", {
-      onClick: () => deletePhoto(photoMod.itemId, photoMod.defectId, photoMod.idx),
+      onClick: () => isCat ? deleteCatPhoto(photoMod.catId, photoMod.idx) : deletePhoto(photoMod.itemId, photoMod.defectId, photoMod.idx),
       style: {
         marginTop: 12,
         background: C.danger,
