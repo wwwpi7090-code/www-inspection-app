@@ -284,7 +284,7 @@ async function checkStorageQuota() {
 }
 
 // ─── CONSTANTS ───────────────────────────────────────────────
-const APP_VERSION = 'v3.4';
+const APP_VERSION = 'v3.5';
 const APP_DATE = '2026-09-02'; // Update this on each release
 const APP_VER_DISPLAY = `${APP_VERSION} · ${APP_DATE}`;
 const ST = {
@@ -680,8 +680,16 @@ const genFileNo = () => {
   return `wpi${String(n.getDate()).padStart(2, '0')}${String(n.getMonth() + 1).padStart(2, '0')}${String(n.getFullYear()).slice(2)}-01`;
 };
 function blankItem() {
+  // A checklist item holds zero or more defects. status is the item's own state.
   return {
     status: ST.pending,
+    defects: []
+  };
+}
+function blankDefect() {
+  return {
+    id: gid(),
+    defectRef: '',
     location: '',
     description: '',
     implication: '',
@@ -689,9 +697,29 @@ function blankItem() {
     grade: '',
     axes: [],
     material: '',
-    photos: [],
-    flagged: false
+    photos: []
   };
+}
+
+// Every defect across the inspection, in D-XX order, with its item/category context.
+function allDefects(ins) {
+  const out = [];
+  CATS.forEach(cat => cat.items.forEach(item => {
+    (ins.items?.[item.id]?.defects || []).forEach(df => {
+      out.push({
+        ...df,
+        itemId: item.id,
+        item: item.l,
+        cat: cat.label,
+        catId: cat.id,
+        catShort: cat.label.replace(/^\d+\.\s/, '')
+      });
+    });
+  }));
+  return out.sort((a, b) => parseInt((a.defectRef || 'D-99').replace('D-', ''), 10) - parseInt((b.defectRef || 'D-99').replace('D-', ''), 10));
+}
+function isDefectComplete(df) {
+  return !!(df.location && df.description && df.implication && df.recommendation && df.grade);
 }
 
 // ── generalInfo helpers (Items 06–12) ─────────────────────────
@@ -740,6 +768,54 @@ function blankGeneralInfo() {
       eq: ''
     },
     scopeLimitations: ''
+  };
+}
+
+// v3 stored one defect per checklist item. v4 stores an array, so an item
+// such as 'Cladding' can carry cracking, failed sealant and clearance issues
+// as separate numbered defects.
+function migrateItemsToV4(ins) {
+  if (ins._itemsV4) return {
+    items: ins.items,
+    migrated: false
+  };
+  const items = {};
+  let touched = false;
+  Object.entries(ins.items || {}).forEach(([id, it]) => {
+    if (Array.isArray(it.defects)) {
+      items[id] = it;
+      return;
+    }
+    if (it.flagged) {
+      touched = true;
+      items[id] = {
+        status: it.status || ST.done,
+        defects: [{
+          id: gid(),
+          defectRef: it.defectRef || '',
+          location: it.location || '',
+          description: it.description || '',
+          implication: it.implication || '',
+          recommendation: it.recommendation || '',
+          grade: it.grade || '',
+          axes: it.axes || [],
+          material: it.material || '',
+          photos: it.photos || []
+        }]
+      };
+    } else {
+      // Unflagged item: keep status; any stray photos/comment are dropped from
+      // the defect model but the item itself is preserved.
+      items[id] = {
+        status: it.status || ST.pending,
+        defects: []
+      };
+      if (it.photos?.length || it.description) touched = true;
+    }
+  });
+  return {
+    items,
+    migrated: touched
   };
 }
 function migrateToV3(ins) {
@@ -873,8 +949,8 @@ function catSt(catId, ins) {
   if (ss.every(s => s !== ST.pending)) return ST.done;
   return ST.pending;
 }
-function isFlagComplete(d) {
-  return d.flagged && d.location && d.description && d.implication && d.recommendation && d.grade;
+function itemHasIncomplete(d) {
+  return (d?.defects || []).some(df => !isDefectComplete(df));
 }
 function validateReport(ins) {
   const errors = [];
@@ -907,32 +983,34 @@ function validateReport(ins) {
     section: 'info'
   });
   CATS.forEach(cat => cat.items.forEach(item => {
-    const d = ins.items[item.id];
-    if (!d?.flagged) return;
-    if (!d.location) errors.push({
-      msg: `${cat.label} — ${item.l}: Location required`,
-      section: 'checklist',
-      catId: cat.id
-    });
-    if (!d.description) errors.push({
-      msg: `${cat.label} — ${item.l}: Description required`,
-      section: 'checklist',
-      catId: cat.id
-    });
-    if (!d.implication) errors.push({
-      msg: `${cat.label} — ${item.l}: Implication required`,
-      section: 'checklist',
-      catId: cat.id
-    });
-    if (!d.recommendation) errors.push({
-      msg: `${cat.label} — ${item.l}: Recommendation required`,
-      section: 'checklist',
-      catId: cat.id
-    });
-    if (!d.grade) errors.push({
-      msg: `${cat.label} — ${item.l}: Grade must be selected`,
-      section: 'checklist',
-      catId: cat.id
+    (ins.items[item.id]?.defects || []).forEach(df => {
+      const ref = df.defectRef || item.l;
+      const where = `${cat.label} — ${item.l} (${ref})`;
+      if (!df.location) errors.push({
+        msg: `${where}: Location required`,
+        section: 'checklist',
+        catId: cat.id
+      });
+      if (!df.description) errors.push({
+        msg: `${where}: Description required`,
+        section: 'checklist',
+        catId: cat.id
+      });
+      if (!df.implication) errors.push({
+        msg: `${where}: Implication required`,
+        section: 'checklist',
+        catId: cat.id
+      });
+      if (!df.recommendation) errors.push({
+        msg: `${where}: Recommendation required`,
+        section: 'checklist',
+        catId: cat.id
+      });
+      if (!df.grade) errors.push({
+        msg: `${where}: Grade must be selected`,
+        section: 'checklist',
+        catId: cat.id
+      });
     });
   }));
   const hasReadings = ins.moisture.readings.length > 0;
@@ -973,35 +1051,18 @@ function buildExecSummary(ins) {
   }
 
   // ── 3. Significant Defects (only — no maintenance items)
-  const sig = [];
-  CATS.forEach(cat => cat.items.forEach(item => {
-    const d = ins.items?.[item.id];
-    if (d?.flagged && d.grade === 'significant') {
-      sig.push({
-        ...d,
-        cat: cat.label.replace(/^\d+\.\s/, ''),
-        item: item.l
-      });
-    }
-  }));
-  sig.sort((a, b) => parseInt((a.defectRef || 'D-99').replace('D-', ''), 10) - parseInt((b.defectRef || 'D-99').replace('D-', ''), 10));
+  const sig = allDefects(ins).filter(df => df.grade === 'significant');
   if (sig.length) {
     out.push(`${sig.length} item${sig.length > 1 ? 's have' : ' has'} been graded as a Significant Defect. ` + `${sig.length > 1 ? 'These are' : 'This is'} summarised below. ` + `Full entries, including implications and recommendations, are set out in the body of this report.`);
     sig.forEach(d => {
-      out.push(`${d.defectRef || '—'} — ${d.cat}, ${d.item}. Location: ${d.location || '—'}. ${d.description || '—'}`);
+      out.push(`${d.defectRef || '—'} — ${d.catShort}, ${d.item}. Location: ${d.location || '—'}. ${d.description || '—'}`);
     });
   } else {
     out.push('No items have been graded as a Significant Defect.');
   }
 
   // ── 4. Further investigation items
-  const fi = [];
-  CATS.forEach(cat => cat.items.forEach(item => {
-    const d = ins.items?.[item.id];
-    if (d?.flagged && (d.axes || []).includes('further_investigation')) {
-      fi.push(d.defectRef || item.l);
-    }
-  }));
+  const fi = allDefects(ins).filter(df => (df.axes || []).includes('further_investigation')).map(df => df.defectRef || df.item);
   if (fi.length) {
     out.push(`Further investigation is recommended in respect of the following items: ${fi.join(', ')}.`);
   }
@@ -1280,6 +1341,364 @@ function PhotoThumb({
   }, "P", photoRef.num));
 }
 
+// Defect text field. Uncontrolled + commit-on-blur so a keystroke never
+// triggers a save/re-render cycle mid-typing.
+function DefectField({
+  label,
+  value,
+  onCommit,
+  placeholder,
+  filled,
+  rows = 0
+}) {
+  const style = {
+    ...inp,
+    borderColor: filled ? C.border : C.amber,
+    ...(rows ? {
+      minHeight: rows * 20 + 20,
+      resize: 'vertical'
+    } : {})
+  };
+  return /*#__PURE__*/React.createElement(FRow, {
+    label: label
+  }, rows ? /*#__PURE__*/React.createElement("textarea", {
+    style: style,
+    defaultValue: value || '',
+    onBlur: e => onCommit(e.target.value),
+    placeholder: placeholder
+  }) : /*#__PURE__*/React.createElement("input", {
+    style: style,
+    defaultValue: value || '',
+    onBlur: e => onCommit(e.target.value),
+    placeholder: placeholder
+  }));
+}
+
+// Free-text field bound to generalInfo — written as it appears in the report.
+// Module scope so typing never remounts the input.
+function BCField({
+  label,
+  value,
+  onCommit,
+  placeholder,
+  rows = 2
+}) {
+  return /*#__PURE__*/React.createElement(FRow, {
+    label: label
+  }, /*#__PURE__*/React.createElement("textarea", {
+    style: {
+      ...inp,
+      minHeight: rows * 22 + 20,
+      resize: 'vertical',
+      fontSize: 13,
+      lineHeight: 1.5
+    },
+    defaultValue: value || '',
+    onBlur: e => onCommit(e.target.value),
+    placeholder: placeholder
+  }));
+}
+
+// ─── SHARED LAYOUT (module scope — stable component identity) ──
+// Defined outside App so React never sees a new component type on
+// re-render. Previously nested inside App, which remounted the whole
+// tree on every keystroke and dropped input focus.
+function Layout({
+  title,
+  children,
+  ui
+}) {
+  const {
+    isOnline,
+    storageWarning,
+    swUpdate,
+    page,
+    setPage,
+    setCur,
+    cur,
+    prog,
+    incompleteN,
+    toast,
+    gradeDialog,
+    setGradeDialog,
+    updItem,
+    confirmSignificant,
+    fileRef,
+    onFileInput
+  } = ui;
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      maxWidth: 480,
+      margin: '0 auto',
+      minHeight: '100vh',
+      background: C.bg,
+      fontFamily: "'Segoe UI',system-ui,sans-serif",
+      display: 'flex',
+      flexDirection: 'column'
+    }
+  }, /*#__PURE__*/React.createElement("style", null, `*{box-sizing:border-box} input,select,textarea{font-family:inherit} ::-webkit-scrollbar{width:4px} ::-webkit-scrollbar-thumb{background:#E0E3E7;border-radius:2px} @keyframes pulse{0%,100%{opacity:.3}50%{opacity:1}}`), !isOnline && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.offlineBg,
+      color: C.offlineTxt,
+      fontSize: 12,
+      textAlign: 'center',
+      padding: '6px 16px',
+      fontWeight: 600
+    }
+  }, "⚠ Offline — entries are saved to this device"), storageWarning && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: '#37474F',
+      color: '#ECEFF1',
+      fontSize: 11,
+      textAlign: 'center',
+      padding: '5px',
+      fontWeight: 600
+    }
+  }, "⚠ Storage >80% full — consider exporting data"), swUpdate && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: '#1565C0',
+      color: '#fff',
+      fontSize: 11,
+      textAlign: 'center',
+      padding: '5px',
+      cursor: 'pointer'
+    },
+    onClick: () => {
+      navigator.serviceWorker.controller?.postMessage('skipWaiting');
+      window.location.reload();
+    }
+  }, "🔄 Update available — tap to refresh"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.headerBg,
+      padding: '13px 16px',
+      display: 'flex',
+      alignItems: 'center',
+      gap: 10,
+      position: 'sticky',
+      top: 0,
+      zIndex: 100
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      if (['checklist', 'summary'].includes(page)) setPage('info');else {
+        setPage('home');
+        setCur(null);
+      }
+    },
+    style: {
+      background: 'none',
+      border: 'none',
+      color: C.white,
+      cursor: 'pointer',
+      fontSize: 24,
+      padding: '2px 4px',
+      lineHeight: 1
+    }
+  }, "‹"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 15,
+      fontWeight: 700,
+      color: C.white
+    }
+  }, title), (cur?.generalInfo?.address?.asPerTitle || cur?.insp?.address) && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: C.teal,
+      marginTop: 1,
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+      whiteSpace: 'nowrap'
+    }
+  }, cur.generalInfo?.address?.asPerTitle || cur.insp.address)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 6
+    }
+  }, incompleteN > 0 && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 10,
+      fontWeight: 700,
+      background: C.amber,
+      color: '#fff',
+      padding: '2px 6px',
+      borderRadius: 10
+    }
+  }, "⚠ ", incompleteN), cur?.wt?.rating && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 10,
+      fontWeight: 700,
+      padding: '2px 8px',
+      borderRadius: 10,
+      background: cur.wt.rating === 'HIGH' ? '#C62828' : cur.wt.rating === 'MEDIUM' ? '#EF6C00' : C.done,
+      color: '#fff'
+    }
+  }, cur.wt.rating), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: 'monospace',
+      fontSize: 11,
+      color: C.teal,
+      fontWeight: 700
+    }
+  }, prog, "%"))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      height: 4,
+      background: '#2A2F35'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      height: '100%',
+      width: `${prog}%`,
+      background: C.teal,
+      transition: 'width .4s'
+    }
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1,
+      overflowY: 'auto',
+      padding: '14px 14px 100px'
+    }
+  }, children), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'fixed',
+      bottom: 0,
+      left: '50%',
+      transform: 'translateX(-50%)',
+      width: '100%',
+      maxWidth: 480,
+      background: C.white,
+      borderTop: `1px solid ${C.border}`,
+      display: 'flex',
+      zIndex: 100
+    }
+  }, [['info', '📋', 'Details'], ['checklist', '✅', 'Checklist'], ['summary', '📊', 'Summary']].map(([p, icon, lb]) => /*#__PURE__*/React.createElement("button", {
+    key: p,
+    onClick: () => setPage(p),
+    style: {
+      flex: 1,
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      gap: 2,
+      background: 'none',
+      border: 'none',
+      cursor: 'pointer',
+      padding: '10px 6px 12px',
+      color: page === p ? C.primary : C.txt2,
+      borderTop: page === p ? `2.5px solid ${C.primary}` : '2.5px solid transparent'
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 20
+    }
+  }, icon), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 9,
+      fontWeight: 700,
+      textTransform: 'uppercase',
+      letterSpacing: '.04em'
+    }
+  }, lb)))), toast && /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'fixed',
+      bottom: 82,
+      left: '50%',
+      transform: 'translateX(-50%)',
+      background: toast.type === 'error' ? C.danger : C.done,
+      color: '#fff',
+      padding: '10px 22px',
+      borderRadius: 22,
+      fontSize: 13,
+      fontWeight: 600,
+      zIndex: 300,
+      whiteSpace: 'nowrap',
+      boxShadow: '0 4px 16px rgba(0,0,0,.2)'
+    }
+  }, toast.msg), gradeDialog && /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'fixed',
+      inset: 0,
+      background: 'rgba(0,0,0,.6)',
+      zIndex: 200,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 24
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.white,
+      borderRadius: 16,
+      padding: 24,
+      maxWidth: 360,
+      width: '100%'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 16,
+      fontWeight: 700,
+      color: '#C62828',
+      marginBottom: 12
+    }
+  }, "🔴 Confirm Significant Defect"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: 13,
+      color: C.txt2,
+      lineHeight: 1.6,
+      marginBottom: 20
+    }
+  }, "Is this defect ", /*#__PURE__*/React.createElement("strong", null, "not resolvable by maintenance"), " (repainting, resealing, flashing replacement, cleaning)?", /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("br", null), "If it can be fixed by maintenance, use Significant Maintenance instead."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      updItem(gradeDialog.itemId, {
+        grade: 'maintenance'
+      });
+      setGradeDialog(null);
+    },
+    style: {
+      flex: 1,
+      padding: '11px',
+      borderRadius: 8,
+      border: `1.5px solid #EF6C00`,
+      background: '#FFF3E0',
+      color: '#EF6C00',
+      fontWeight: 700,
+      cursor: 'pointer',
+      fontSize: 13
+    }
+  }, "Use Maintenance"), /*#__PURE__*/React.createElement("button", {
+    onClick: confirmSignificant,
+    style: {
+      flex: 1,
+      padding: '11px',
+      borderRadius: 8,
+      border: 'none',
+      background: '#C62828',
+      color: '#fff',
+      fontWeight: 700,
+      cursor: 'pointer',
+      fontSize: 13
+    }
+  }, "Confirm Significant")))), /*#__PURE__*/React.createElement("input", {
+    ref: fileRef,
+    type: "file",
+    accept: "image/*",
+    multiple: true,
+    onChange: onFileInput,
+    style: {
+      display: 'none'
+    }
+  }));
+}
+
 // ─── MAIN APP ─────────────────────────────────────────────────
 function App() {
   const [dbReady, setDbReady] = useState(false);
@@ -1288,7 +1707,7 @@ function App() {
   const [cur, setCur] = useState(null);
   const [page, setPage] = useState('splash');
   const [catTab, setCatTab] = useState(0);
-  const [photoMod, setPhotoMod] = useState(null); // { itemId, idx }
+  const [photoMod, setPhotoMod] = useState(null); // { itemId, defectId, idx }
   const [wordGenerating, setWordGenerating] = useState(false);
   const [migrationBanner, setMigrationBanner] = useState(false);
   const [toast, setToast] = useState(null);
@@ -1313,10 +1732,19 @@ function App() {
         const inspections = [];
         let anyMigrated = false;
         for (const raw of rawInspections) {
-          const {
+          let {
             ins,
             migrated
           } = migrateToV3(raw);
+          const iv4 = migrateItemsToV4(ins);
+          if (iv4.migrated || !ins._itemsV4) {
+            ins = {
+              ...ins,
+              items: iv4.items,
+              _itemsV4: true
+            };
+            migrated = migrated || iv4.migrated;
+          }
           if (migrated) {
             await dbPut('inspections', ins);
             anyMigrated = true;
@@ -1436,35 +1864,40 @@ function App() {
   }
 
   // ── Photo handling ───────────────────────────────────────────
-  async function handleFiles(files, itemId) {
-    if (!files?.length || !itemId) return;
-    const ins = cur;
-    const item = ins.items[itemId];
-    const existingCount = item.photos?.length || 0;
+  // Photos attach to a specific defect, so an item with several defects keeps
+  // each set of evidence with the defect it belongs to.
+  async function handleFiles(files, target) {
+    if (!files?.length || !target?.itemId || !target?.defectId) return;
+    const {
+      itemId,
+      defectId
+    } = target;
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       try {
-        // 1. Compress
         const blob = await compressImage(file);
 
-        // 2. Build photo record
+        // Always read the freshest record — several files may be processed in a row
+        const ins = (await dbGet('inspections', cur.id)) || cur;
+        const item = ins.items[itemId];
+        const df = (item?.defects || []).find(x => x.id === defectId);
+        if (!df) {
+          showToast('Defect no longer exists', 'error');
+          return;
+        }
+        const existing = df.photos || [];
         const photoId = gid();
-        const seq = existingCount + i + 1;
-        // Global photo number across inspection
-        const allPhotos = Object.values(ins.items).flatMap(d => d.photos || []);
-        const globalNum = allPhotos.length + i + 1;
-        // Use D-XX ref if available, else itemId
-        const defectRef = ins.items[itemId]?.defectRef || itemId;
-        // Photo lettered suffix: D-01a, D-01b, D-01c...
-        const photoSuffix = String.fromCharCode(97 + i); // a, b, c...
-        const photoLabel = `${defectRef}${photoSuffix}`;
+        const seq = existing.length + 1;
+        const globalNum = Object.values(ins.items).flatMap(it => (it.defects || []).flatMap(x => x.photos || [])).length + 1;
+        const defectRef = df.defectRef || itemId;
+        // Lettered suffix continues from what the defect already has: D-01a, D-01b…
+        const photoLabel = `${defectRef}${String.fromCharCode(97 + existing.length)}`;
         const filename = photoFilename(ins.fileNo, photoLabel, seq);
-
-        // 3. Save to IndexedDB
         const photoRecord = {
           photoId,
           inspectionId: ins.id,
           defectRef,
+          defectId,
           seq,
           photoLabel,
           blob,
@@ -1483,24 +1916,16 @@ function App() {
           saveStatus = 'fail';
           showToast('🔴 Photo save to app failed — retry', 'error');
         }
-
-        // 4. Save to device Downloads (if enabled)
         let savedToDevice = false;
         if (ins.saveDevicePhotos) {
           savedToDevice = saveToDevice(blob, filename);
-          if (!savedToDevice) saveStatus = saveStatus === 'fail' ? 'fail' : 'partial';
+          if (!savedToDevice && saveStatus !== 'fail') saveStatus = 'partial';
         }
-
-        // 5. Update IndexedDB record with final status
-        if (saveStatus !== 'pending') {
-          await dbPut('photos', {
-            ...photoRecord,
-            saveStatus,
-            savedToDevice
-          });
-        }
-
-        // 6. Update inspection item with photo reference
+        await dbPut('photos', {
+          ...photoRecord,
+          saveStatus,
+          savedToDevice
+        });
         const photoRef = {
           photoId,
           num: globalNum,
@@ -1509,111 +1934,118 @@ function App() {
           saveStatus,
           savedToDevice
         };
-        const updatedPhotos = [...(item.photos || []), photoRef];
-        // Re-fetch cur in case multiple files are being processed
-        const latestItem = (await dbGet('inspections', ins.id))?.items?.[itemId] || ins.items[itemId];
+        const defects = item.defects.map(x => x.id === defectId ? {
+          ...x,
+          photos: [...(x.photos || []), photoRef]
+        } : x);
         await saveInspection({
           ...ins,
           items: {
             ...ins.items,
             [itemId]: {
-              ...latestItem,
-              photos: [...(latestItem.photos || []), photoRef]
+              ...item,
+              defects
             }
           }
         });
-        const statusMsg = savedToDevice ? '✅ Photo saved + downloaded' : saveStatus === 'ok' ? '💾 Photo saved to app' : '⚠️ Partial save — check';
-        showToast(statusMsg, saveStatus === 'fail' ? 'error' : 'ok');
+        showToast(savedToDevice ? '✅ Photo saved + downloaded' : saveStatus === 'ok' ? '💾 Photo saved to app' : '⚠️ Partial save — check', saveStatus === 'fail' ? 'error' : 'ok');
       } catch (err) {
         console.error('Photo handling error:', err);
         showToast('🔴 Photo error — please retry', 'error');
       }
     }
-    fileRef.current.value = '';
+    if (fileRef.current) fileRef.current.value = '';
   }
   function onFileInput(e) {
     handleFiles(e.target.files, pendingPhotoItem.current);
   }
-  async function deletePhoto(itemId, photoIdx) {
-    const d = cur.items[itemId];
-    const photoRef = d.photos[photoIdx];
+  async function deletePhoto(itemId, defectId, photoIdx) {
+    const item = cur.items[itemId];
+    const df = (item?.defects || []).find(x => x.id === defectId);
+    const photoRef = df?.photos?.[photoIdx];
     if (photoRef?.photoId) await dbDelete('photos', photoRef.photoId).catch(() => {});
-    const photos = [...d.photos];
-    photos.splice(photoIdx, 1);
+    const defects = item.defects.map(x => x.id === defectId ? {
+      ...x,
+      photos: x.photos.filter((_, n) => n !== photoIdx)
+    } : x);
     await updItem(itemId, {
-      photos
+      defects
     });
     setPhotoMod(null);
     showToast('Photo deleted');
   }
 
-  // ── Defect auto-numbering ────────────────────────────────────
+  // ── Defect CRUD ──────────────────────────────────────────────
   function nextDefectRef(inspection) {
-    // Find highest existing D-XX number
     let max = 0;
-    Object.values(inspection.items).forEach(d => {
-      if (d.defectRef) {
-        const n = parseInt(d.defectRef.replace('D-', ''), 10);
-        if (!isNaN(n) && n > max) max = n;
-      }
-    });
+    Object.values(inspection.items || {}).forEach(it => (it.defects || []).forEach(df => {
+      const n = parseInt((df.defectRef || '').replace('D-', ''), 10);
+      if (!isNaN(n) && n > max) max = n;
+    }));
     return `D-${String(max + 1).padStart(2, '0')}`;
   }
 
-  // ── Defect flagging with grade confirmation ──────────────────
-  async function toggleFlag(itemId, itemLabel) {
-    const d = cur.items[itemId];
-    if (d.flagged) {
-      // Unflag — keep defectRef (gaps allowed per spec)
-      await updItem(itemId, {
-        flagged: false,
-        grade: '',
-        axes: []
-      });
-    } else {
-      // Flag — assign D-XX number if not already assigned
-      const defectRef = d.defectRef || nextDefectRef(cur);
-      await updItem(itemId, {
-        flagged: true,
-        status: ST.done,
-        defectRef
-      });
-    }
+  // Add a defect to an item. Items may hold several — e.g. cladding cracking,
+  // failed sealant and inadequate clearance are three separate defects.
+  async function addDefect(itemId) {
+    const it = cur.items[itemId] || blankItem();
+    const df = {
+      ...blankDefect(),
+      defectRef: nextDefectRef(cur)
+    };
+    await updItem(itemId, {
+      status: ST.done,
+      defects: [...(it.defects || []), df]
+    });
+    showToast(`${df.defectRef} added`);
+    return df.id;
   }
-  async function handleGradeSelect(itemId, gradeId) {
+  function updDefect(itemId, defectId, patch) {
+    const it = cur.items[itemId];
+    const defects = (it.defects || []).map(df => df.id === defectId ? {
+      ...df,
+      ...patch
+    } : df);
+    return updItem(itemId, {
+      defects
+    });
+  }
+  async function removeDefect(itemId, defectId) {
+    const it = cur.items[itemId];
+    const df = (it.defects || []).find(x => x.id === defectId);
+    if (!df) return;
+    if (!confirm(`Delete ${df.defectRef || 'this defect'} and its photos? This cannot be undone.`)) return;
+    for (const ph of df.photos || []) {
+      if (ph.photoId) await dbDelete('photos', ph.photoId).catch(() => {});
+    }
+    const defects = (it.defects || []).filter(x => x.id !== defectId);
+    await updItem(itemId, {
+      defects,
+      status: defects.length ? ST.done : ST.pending
+    });
+    showToast(`${df.defectRef || 'Defect'} deleted`);
+  }
+  async function handleGradeSelect(itemId, defectId, gradeId) {
     if (gradeId === 'significant') {
-      // Confirmation dialog
       setGradeDialog({
         itemId,
+        defectId,
         grade: gradeId
       });
     } else {
-      await updItem(itemId, {
+      await updDefect(itemId, defectId, {
         grade: gradeId
       });
     }
   }
   async function confirmSignificant() {
     if (!gradeDialog) return;
-    await updItem(gradeDialog.itemId, {
+    await updDefect(gradeDialog.itemId, gradeDialog.defectId, {
       grade: 'significant'
     });
     setGradeDialog(null);
   }
 
-  // ── generalInfo update helpers ──────────────────────────────
-  function updGI(path, value) {
-    const gi = JSON.parse(JSON.stringify(cur.generalInfo || blankGeneralInfo()));
-    let obj = gi;
-    for (let i = 0; i < path.length - 1; i++) {
-      obj = obj[path[i]];
-    }
-    obj[path[path.length - 1]] = value;
-    return saveInspection({
-      ...cur,
-      generalInfo: gi
-    });
-  }
   // ── Export / Import JSON ────────────────────────────────────
   function exportJSON() {
     if (!cur) return;
@@ -2035,25 +2467,11 @@ function App() {
       };
 
       // ── Build flagged list ──
-      const flagged = flaggedItems.map(([itemId, d]) => {
-        const catObj = CATS.find(c => c.items.find(i => i.id === itemId));
-        const itemObj = catObj?.items.find(i => i.id === itemId);
-        const gc = gradeColors[d.grade] || {};
-        const photoLabels = (d.photos || []).map(ph => ph.photoLabel || '?').join(', ');
-        return {
-          ...d,
-          cat: catObj?.label,
-          catShort: catObj?.label?.replace(/^\d+\.\s/, ''),
-          item: itemObj?.l,
-          itemId,
-          gc,
-          photoLabels
-        };
-      }).sort((a, b) => {
-        const na = parseInt((a.defectRef || 'D-99').replace('D-', ''), 10);
-        const nb = parseInt((b.defectRef || 'D-99').replace('D-', ''), 10);
-        return na - nb;
-      });
+      const flagged = allDefects(cur).map(d => ({
+        ...d,
+        gc: gradeColors[d.grade] || {},
+        photoLabels: (d.photos || []).map(ph => ph.photoLabel || '?').join(', ')
+      }));
       const sigDef = flagged.filter(d => d.grade === 'significant');
       const maintDef = flagged.filter(d => d.grade === 'maintenance');
       const detDef = flagged.filter(d => d.grade === 'deterioration');
@@ -2746,290 +3164,36 @@ function App() {
 
   // ── Counts ──────────────────────────────────────────────────
   const prog = cur ? calcPct(cur) : 0;
-  const flaggedItems = cur ? Object.entries(cur.items).filter(([, d]) => d.flagged) : [];
-  const flagN = flaggedItems.length;
-  const sigN = flaggedItems.filter(([, d]) => d.grade === 'significant').length;
-  const incompleteN = flaggedItems.filter(([, d]) => !isFlagComplete(d)).length;
+  const defectList = cur ? allDefects(cur) : [];
+  const flagN = defectList.length;
+  const sigN = defectList.filter(df => df.grade === 'significant').length;
+  const incompleteN = defectList.filter(df => !isDefectComplete(df)).length;
   const doneN = cur ? CATS.filter(c => {
     const s = catSt(c.id, cur);
     return s === ST.done || s === ST.na;
   }).length : 0;
 
   // ── Shared layout ────────────────────────────────────────────
-  const Layout = ({
-    title,
-    children
-  }) => /*#__PURE__*/React.createElement("div", {
-    style: {
-      maxWidth: 480,
-      margin: '0 auto',
-      minHeight: '100vh',
-      background: C.bg,
-      fontFamily: "'Segoe UI',system-ui,sans-serif",
-      display: 'flex',
-      flexDirection: 'column'
-    }
-  }, /*#__PURE__*/React.createElement("style", null, `*{box-sizing:border-box} input,select,textarea{font-family:inherit} ::-webkit-scrollbar{width:4px} ::-webkit-scrollbar-thumb{background:#E0E3E7;border-radius:2px} @keyframes pulse{0%,100%{opacity:.3}50%{opacity:1}}`), !isOnline && /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: C.offlineBg,
-      color: C.offlineTxt,
-      fontSize: 12,
-      textAlign: 'center',
-      padding: '6px 16px',
-      fontWeight: 600
-    }
-  }, "⚠ Offline — entries are saved to this device"), storageWarning && /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: '#37474F',
-      color: '#ECEFF1',
-      fontSize: 11,
-      textAlign: 'center',
-      padding: '5px',
-      fontWeight: 600
-    }
-  }, "⚠ Storage >80% full — consider exporting data"), swUpdate && /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: '#1565C0',
-      color: '#fff',
-      fontSize: 11,
-      textAlign: 'center',
-      padding: '5px',
-      cursor: 'pointer'
-    },
-    onClick: () => {
-      navigator.serviceWorker.controller?.postMessage('skipWaiting');
-      window.location.reload();
-    }
-  }, "🔄 Update available — tap to refresh"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: C.headerBg,
-      padding: '13px 16px',
-      display: 'flex',
-      alignItems: 'center',
-      gap: 10,
-      position: 'sticky',
-      top: 0,
-      zIndex: 100
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: () => {
-      if (['checklist', 'summary'].includes(page)) setPage('info');else {
-        setPage('home');
-        setCur(null);
-      }
-    },
-    style: {
-      background: 'none',
-      border: 'none',
-      color: C.white,
-      cursor: 'pointer',
-      fontSize: 24,
-      padding: '2px 4px',
-      lineHeight: 1
-    }
-  }, "‹"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      flex: 1
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 15,
-      fontWeight: 700,
-      color: C.white
-    }
-  }, title), (cur?.generalInfo?.address?.asPerTitle || cur?.insp?.address) && /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 11,
-      color: C.teal,
-      marginTop: 1,
-      overflow: 'hidden',
-      textOverflow: 'ellipsis',
-      whiteSpace: 'nowrap'
-    }
-  }, cur.generalInfo?.address?.asPerTitle || cur.insp.address)), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: 6
-    }
-  }, incompleteN > 0 && /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 10,
-      fontWeight: 700,
-      background: C.amber,
-      color: '#fff',
-      padding: '2px 6px',
-      borderRadius: 10
-    }
-  }, "⚠ ", incompleteN), cur?.wt?.rating && /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 10,
-      fontWeight: 700,
-      padding: '2px 8px',
-      borderRadius: 10,
-      background: cur.wt.rating === 'HIGH' ? '#C62828' : cur.wt.rating === 'MEDIUM' ? '#EF6C00' : C.done,
-      color: '#fff'
-    }
-  }, cur.wt.rating), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontFamily: 'monospace',
-      fontSize: 11,
-      color: C.teal,
-      fontWeight: 700
-    }
-  }, prog, "%"))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      height: 4,
-      background: '#2A2F35'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      height: '100%',
-      width: `${prog}%`,
-      background: C.teal,
-      transition: 'width .4s'
-    }
-  })), /*#__PURE__*/React.createElement("div", {
-    style: {
-      flex: 1,
-      overflowY: 'auto',
-      padding: '14px 14px 100px'
-    }
-  }, children), /*#__PURE__*/React.createElement("div", {
-    style: {
-      position: 'fixed',
-      bottom: 0,
-      left: '50%',
-      transform: 'translateX(-50%)',
-      width: '100%',
-      maxWidth: 480,
-      background: C.white,
-      borderTop: `1px solid ${C.border}`,
-      display: 'flex',
-      zIndex: 100
-    }
-  }, [['info', '📋', 'Details'], ['checklist', '✅', 'Checklist'], ['summary', '📊', 'Summary']].map(([p, icon, lb]) => /*#__PURE__*/React.createElement("button", {
-    key: p,
-    onClick: () => setPage(p),
-    style: {
-      flex: 1,
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      gap: 2,
-      background: 'none',
-      border: 'none',
-      cursor: 'pointer',
-      padding: '10px 6px 12px',
-      color: page === p ? C.primary : C.txt2,
-      borderTop: page === p ? `2.5px solid ${C.primary}` : '2.5px solid transparent'
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 20
-    }
-  }, icon), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 9,
-      fontWeight: 700,
-      textTransform: 'uppercase',
-      letterSpacing: '.04em'
-    }
-  }, lb)))), toast && /*#__PURE__*/React.createElement("div", {
-    style: {
-      position: 'fixed',
-      bottom: 82,
-      left: '50%',
-      transform: 'translateX(-50%)',
-      background: toast.type === 'error' ? C.danger : C.done,
-      color: '#fff',
-      padding: '10px 22px',
-      borderRadius: 22,
-      fontSize: 13,
-      fontWeight: 600,
-      zIndex: 300,
-      whiteSpace: 'nowrap',
-      boxShadow: '0 4px 16px rgba(0,0,0,.2)'
-    }
-  }, toast.msg), gradeDialog && /*#__PURE__*/React.createElement("div", {
-    style: {
-      position: 'fixed',
-      inset: 0,
-      background: 'rgba(0,0,0,.6)',
-      zIndex: 200,
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: 24
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: C.white,
-      borderRadius: 16,
-      padding: 24,
-      maxWidth: 360,
-      width: '100%'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 16,
-      fontWeight: 700,
-      color: '#C62828',
-      marginBottom: 12
-    }
-  }, "🔴 Confirm Significant Defect"), /*#__PURE__*/React.createElement("p", {
-    style: {
-      fontSize: 13,
-      color: C.txt2,
-      lineHeight: 1.6,
-      marginBottom: 20
-    }
-  }, "Is this defect ", /*#__PURE__*/React.createElement("strong", null, "not resolvable by maintenance"), " (repainting, resealing, flashing replacement, cleaning)?", /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("br", null), "If it can be fixed by maintenance, use Significant Maintenance instead."), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      gap: 8
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: () => {
-      updItem(gradeDialog.itemId, {
-        grade: 'maintenance'
-      });
-      setGradeDialog(null);
-    },
-    style: {
-      flex: 1,
-      padding: '11px',
-      borderRadius: 8,
-      border: `1.5px solid #EF6C00`,
-      background: '#FFF3E0',
-      color: '#EF6C00',
-      fontWeight: 700,
-      cursor: 'pointer',
-      fontSize: 13
-    }
-  }, "Use Maintenance"), /*#__PURE__*/React.createElement("button", {
-    onClick: confirmSignificant,
-    style: {
-      flex: 1,
-      padding: '11px',
-      borderRadius: 8,
-      border: 'none',
-      background: '#C62828',
-      color: '#fff',
-      fontWeight: 700,
-      cursor: 'pointer',
-      fontSize: 13
-    }
-  }, "Confirm Significant")))), /*#__PURE__*/React.createElement("input", {
-    ref: fileRef,
-    type: "file",
-    accept: "image/*",
-    multiple: true,
-    onChange: onFileInput,
-    style: {
-      display: 'none'
-    }
-  }));
+
+  // Prop bundle for the hoisted Layout component
+  const ui = {
+    isOnline,
+    storageWarning,
+    swUpdate,
+    page,
+    setPage,
+    setCur,
+    cur,
+    prog,
+    incompleteN,
+    toast,
+    gradeDialog,
+    setGradeDialog,
+    updItem,
+    confirmSignificant,
+    fileRef,
+    onFileInput
+  };
 
   // ═══ SPLASH ═══════════════════════════════════════════════════
   if (page === 'splash') return /*#__PURE__*/React.createElement("div", {
@@ -3196,7 +3360,7 @@ function App() {
     }
   }, "Recent (", list.length, ")"), list.map(ins => {
     const p = calcPct(ins);
-    const fn = Object.values(ins.items || {}).filter(d => d.flagged).length;
+    const fn = Object.values(ins.items || {}).reduce((n, it) => n + (it.defects?.length || 0), 0);
     return /*#__PURE__*/React.createElement(Card, {
       key: ins.id,
       onClick: () => openInsp(ins),
@@ -3321,32 +3485,8 @@ function App() {
   // ═══ INFO (DETAILS) PAGE ══════════════════════════════════════
   if (page === 'info' && cur) {
     const gi = cur.generalInfo || blankGeneralInfo();
-
-    // Free-text field bound to generalInfo.bc.* — written as it appears in the report
-    const BCField = ({
-      label,
-      path,
-      placeholder,
-      rows = 2
-    }) => {
-      const val = path.reduce((o, k) => (o || {})[k], gi) || '';
-      return /*#__PURE__*/React.createElement(FRow, {
-        label: label
-      }, /*#__PURE__*/React.createElement("textarea", {
-        key: `${cur.id}-${path.join('.')}`,
-        style: {
-          ...inp,
-          minHeight: rows * 22 + 20,
-          resize: 'vertical',
-          fontSize: 13,
-          lineHeight: 1.5
-        },
-        defaultValue: val,
-        onBlur: e => updGI(path, e.target.value),
-        placeholder: placeholder
-      }));
-    };
     return /*#__PURE__*/React.createElement(Layout, {
+      ui: ui,
       title: "General Information"
     }, (cur._migratedToV3 || migrationBanner) && /*#__PURE__*/React.createElement("div", {
       style: {
@@ -3523,89 +3663,107 @@ function App() {
       }
     }, "Write each entry as it should read in the report. Where information was not established, say so (e.g. \"No information was provided regarding recently added flashings.\")."), /*#__PURE__*/React.createElement(BCField, {
       label: "Age of Building",
-      path: ['bc', 'age'],
+      value: gi?.bc?.age,
+      onCommit: v => updGI(['bc', 'age'], v),
       placeholder: "Approximately 25 years old (constructed 2000)."
     }), /*#__PURE__*/React.createElement(BCField, {
       label: "Building Type",
-      path: ['bc', 'buildingType'],
+      value: gi?.bc?.buildingType,
+      onCommit: v => updGI(['bc', 'buildingType'], v),
       placeholder: "Residential two-storey detached dwelling",
       rows: 1
     }), /*#__PURE__*/React.createElement(BCField, {
       label: "Levels",
-      path: ['bc', 'levels'],
+      value: gi?.bc?.levels,
+      onCommit: v => updGI(['bc', 'levels'], v),
       placeholder: "Two storeys.",
       rows: 1
     }), /*#__PURE__*/React.createElement(BCField, {
       label: "Orientation of Building",
-      path: ['bc', 'orientation'],
+      value: gi?.bc?.orientation,
+      onCommit: v => updGI(['bc', 'orientation'], v),
       placeholder: "The dwelling fronts the main street and is oriented generally to the north."
     }), /*#__PURE__*/React.createElement(BCField, {
       label: "Site Exposure",
-      path: ['bc', 'siteExposure'],
+      value: gi?.bc?.siteExposure,
+      onCommit: v => updGI(['bc', 'siteExposure'], v),
       placeholder: "Climate Zone 1. The site is located within an Exposure Zone C and Wind Zone Medium.",
       rows: 3
     }), /*#__PURE__*/React.createElement(BCField, {
       label: "Contour and Vegetation",
-      path: ['bc', 'contourVegetation'],
+      value: gi?.bc?.contourVegetation,
+      onCommit: v => updGI(['bc', 'contourVegetation'], v),
       placeholder: "The site slopes down from the northern (street) side toward the south…",
       rows: 3
     }), /*#__PURE__*/React.createElement(BCField, {
       label: "Wall Cladding Type",
-      path: ['bc', 'wallCladding'],
+      value: gi?.bc?.wallCladding,
+      onCommit: v => updGI(['bc', 'wallCladding'], v),
       placeholder: "Monolithic EIFS (Exterior Insulation and Finish System) cladding"
     }), /*#__PURE__*/React.createElement(BCField, {
       label: "Construction Type",
-      path: ['bc', 'constructionType'],
+      value: gi?.bc?.constructionType,
+      onCommit: v => updGI(['bc', 'constructionType'], v),
       placeholder: "Timber-framed construction",
       rows: 1
     }), /*#__PURE__*/React.createElement(BCField, {
       label: "Roof Cladding",
-      path: ['bc', 'roofCladding'],
+      value: gi?.bc?.roofCladding,
+      onCommit: v => updGI(['bc', 'roofCladding'], v),
       placeholder: "Steel tile roof cladding",
       rows: 1
     }), /*#__PURE__*/React.createElement(BCField, {
       label: "Roof Design",
-      path: ['bc', 'roofDesign'],
+      value: gi?.bc?.roofDesign,
+      onCommit: v => updGI(['bc', 'roofDesign'], v),
       placeholder: "Pitched steel tile roof with guttering",
       rows: 1
     }), /*#__PURE__*/React.createElement(BCField, {
       label: "Foundation Type",
-      path: ['bc', 'foundationType'],
+      value: gi?.bc?.foundationType,
+      onCommit: v => updGI(['bc', 'foundationType'], v),
       placeholder: "Concrete slab and pile foundation system",
       rows: 1
     }), /*#__PURE__*/React.createElement(BCField, {
       label: "Property Furnished",
-      path: ['bc', 'furnished'],
+      value: gi?.bc?.furnished,
+      onCommit: v => updGI(['bc', 'furnished'], v),
       placeholder: "The property was furnished at the time of inspection.",
       rows: 1
     }), /*#__PURE__*/React.createElement(BCField, {
       label: "Recent Redecoration or Repairs",
-      path: ['bc', 'alterations'],
+      value: gi?.bc?.alterations,
+      onCommit: v => updGI(['bc', 'alterations'], v),
       placeholder: "One item per line, e.g.\n\u2022 Internal partition wall added at ground level (approximately 10 years ago).\n\u2022 Garage converted to storage (over 10 years ago).",
       rows: 5
     }), /*#__PURE__*/React.createElement(BCField, {
       label: "Recently Added Flashings",
-      path: ['bc', 'addedFlashings'],
+      value: gi?.bc?.addedFlashings,
+      onCommit: v => updGI(['bc', 'addedFlashings'], v),
       placeholder: "No information was provided regarding recently added flashings.",
       rows: 2
     }), /*#__PURE__*/React.createElement(BCField, {
       label: "Note",
-      path: ['bc', 'note'],
+      value: gi?.bc?.note,
+      onCommit: v => updGI(['bc', 'note'], v),
       placeholder: "(No additional information provided.)",
       rows: 1
     })), /*#__PURE__*/React.createElement(Card, null, /*#__PURE__*/React.createElement(SecTitle, null, "Services"), /*#__PURE__*/React.createElement(BCField, {
       label: "Water Source",
-      path: ['services', 'water'],
+      value: gi?.services?.water,
+      onCommit: v => updGI(['services', 'water'], v),
       placeholder: "Connected to the municipal water supply (Watercare)",
       rows: 1
     }), /*#__PURE__*/React.createElement(BCField, {
       label: "Sewage Disposal",
-      path: ['services', 'sewage'],
+      value: gi?.services?.sewage,
+      onCommit: v => updGI(['services', 'sewage'], v),
       placeholder: "Connected to the public sewer network.",
       rows: 1
     }), /*#__PURE__*/React.createElement(BCField, {
       label: "Gas Meter",
-      path: ['services', 'gas'],
+      value: gi?.services?.gas,
+      onCommit: v => updGI(['services', 'gas'], v),
       placeholder: "A gas meter was observed.",
       rows: 1
     })), /*#__PURE__*/React.createElement(Card, null, /*#__PURE__*/React.createElement(SecTitle, null, "Zones"), /*#__PURE__*/React.createElement("div", {
@@ -3850,6 +4008,7 @@ function App() {
     const cat = CATS[catTab];
     const cs = catSt(cat.id, cur);
     return /*#__PURE__*/React.createElement(Layout, {
+      ui: ui,
       title: cat.label
     }, /*#__PURE__*/React.createElement("div", {
       style: {
@@ -3861,7 +4020,7 @@ function App() {
       }
     }, CATS.map((c, i) => {
       const s = catSt(c.id, cur);
-      const hasIncomplete = c.items.some(item => cur.items[item.id]?.flagged && !isFlagComplete(cur.items[item.id]));
+      const hasIncomplete = c.items.some(item => itemHasIncomplete(cur.items[item.id]));
       return /*#__PURE__*/React.createElement("button", {
         key: c.id,
         onClick: () => setCatTab(i),
@@ -3929,15 +4088,17 @@ function App() {
         border: `1px solid ${cs === ST.done ? C.done : cs === ST.na ? C.border : C.amber}`
       }
     }, cs)), cat.items.map(item => {
-      const d = cur.items[item.id] || {};
-      const expanded = d.status !== ST.pending || d.flagged;
-      const incomplete = d.flagged && !isFlagComplete(d);
+      const it = cur.items[item.id] || blankItem();
+      const defects = it.defects || [];
+      const expanded = it.status !== ST.pending || defects.length > 0;
+      const incomplete = defects.some(df => !isDefectComplete(df));
+      const worst = GRADES.find(g => defects.some(df => df.grade === g.id));
       return /*#__PURE__*/React.createElement(Card, {
         key: item.id,
         style: {
           padding: '12px 14px',
           marginBottom: 8,
-          border: d.flagged ? incomplete ? `2px solid ${C.amber}` : `2px solid ${GRADES.find(g => g.id === d.grade)?.color || C.danger}` : `1px solid ${C.border}`
+          border: defects.length ? incomplete ? `2px solid ${C.amber}` : `2px solid ${worst?.color || C.danger}` : `1px solid ${C.border}`
         }
       }, /*#__PURE__*/React.createElement("div", {
         style: {
@@ -3955,28 +4116,24 @@ function App() {
           fontWeight: 500,
           color: C.txt
         }
-      }, item.l), d.defectRef && d.flagged && /*#__PURE__*/React.createElement("span", {
+      }, item.l), defects.length > 0 && /*#__PURE__*/React.createElement("span", {
         style: {
           marginLeft: 6,
-          fontFamily: 'monospace',
           fontSize: 10,
           fontWeight: 700,
           padding: '1px 6px',
           borderRadius: 4,
-          background: GRADES.find(g => g.id === d.grade)?.bg || '#F5F5F5',
-          color: GRADES.find(g => g.id === d.grade)?.color || C.txt2
+          background: C.bg,
+          color: C.txt2
         }
-      }, d.defectRef)), /*#__PURE__*/React.createElement("div", {
+      }, defects.length, " defect", defects.length > 1 ? 's' : '')), /*#__PURE__*/React.createElement("div", {
         style: {
           display: 'flex',
           gap: 5
         }
       }, /*#__PURE__*/React.createElement("button", {
         onClick: () => updItem(item.id, {
-          status: ST.done,
-          flagged: false,
-          grade: '',
-          axes: []
+          status: ST.done
         }),
         style: {
           padding: '6px 10px',
@@ -3985,15 +4142,12 @@ function App() {
           fontSize: 11,
           fontWeight: 700,
           cursor: 'pointer',
-          background: d.status === ST.done && !d.flagged ? C.done : C.bg,
-          color: d.status === ST.done && !d.flagged ? '#fff' : C.txt2
+          background: it.status === ST.done && !defects.length ? C.done : C.bg,
+          color: it.status === ST.done && !defects.length ? '#fff' : C.txt2
         }
       }, "✓ OK"), /*#__PURE__*/React.createElement("button", {
         onClick: () => updItem(item.id, {
-          status: ST.na,
-          flagged: false,
-          grade: '',
-          axes: []
+          status: ST.na
         }),
         style: {
           padding: '6px 10px',
@@ -4002,11 +4156,11 @@ function App() {
           fontSize: 11,
           fontWeight: 700,
           cursor: 'pointer',
-          background: d.status === ST.na ? C.na : C.bg,
-          color: d.status === ST.na ? '#fff' : C.txt2
+          background: it.status === ST.na ? C.na : C.bg,
+          color: it.status === ST.na ? '#fff' : C.txt2
         }
       }, "N/A"), /*#__PURE__*/React.createElement("button", {
-        onClick: () => toggleFlag(item.id, item.l),
+        onClick: () => addDefect(item.id),
         style: {
           padding: '6px 10px',
           borderRadius: 6,
@@ -4014,245 +4168,305 @@ function App() {
           fontSize: 11,
           fontWeight: 700,
           cursor: 'pointer',
-          background: d.flagged ? GRADES.find(g => g.id === d.grade)?.color || C.danger : C.bg,
-          color: d.flagged ? '#fff' : C.txt2
+          background: defects.length ? C.danger : C.bg,
+          color: defects.length ? '#fff' : C.txt2
         }
-      }, "⚑"))), expanded && /*#__PURE__*/React.createElement("div", {
+      }, "⚑ +"))), expanded && /*#__PURE__*/React.createElement("div", {
         style: {
           marginTop: 12
         }
-      }, incomplete && /*#__PURE__*/React.createElement("div", {
-        style: {
-          background: '#FFF8EC',
-          border: `1px solid ${C.amber}`,
-          borderRadius: 6,
-          padding: '8px 10px',
-          marginBottom: 10,
-          fontSize: 11,
-          color: '#D4820A',
-          fontWeight: 600
-        }
-      }, "⚠ All fields required: Grade + Location + Description + Implication + Recommendation"), d.photos?.length > 0 && /*#__PURE__*/React.createElement("div", {
-        style: {
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: 6,
-          marginBottom: 10
-        }
-      }, d.photos.map((ph, idx) => /*#__PURE__*/React.createElement(PhotoThumb, {
-        key: ph.photoId || idx,
-        photoRef: ph,
-        onClick: () => setPhotoMod({
-          itemId: item.id,
-          idx
-        })
-      }))), d.flagged ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(FRow, {
-        label: "Grade (required)"
-      }, /*#__PURE__*/React.createElement("div", {
-        style: {
-          display: 'flex',
-          gap: 6,
-          flexWrap: 'wrap',
-          marginBottom: 8
-        }
-      }, GRADES.map(g => /*#__PURE__*/React.createElement("button", {
-        key: g.id,
-        onClick: () => handleGradeSelect(item.id, g.id),
-        title: g.tip,
-        style: {
-          flex: '1 1 auto',
-          padding: '8px 6px',
-          borderRadius: 8,
-          border: `2px solid ${d.grade === g.id ? g.color : C.border}`,
-          background: d.grade === g.id ? g.bg : C.white,
-          color: d.grade === g.id ? g.color : C.txt2,
-          fontWeight: 700,
-          fontSize: 11,
-          cursor: 'pointer',
-          textAlign: 'center',
-          minWidth: 80
-        }
-      }, g.id === 'significant' ? '🔴' : g.id === 'maintenance' ? '🟠' : '🟡', " ", g.label))), d.grade && /*#__PURE__*/React.createElement("div", {
-        style: {
-          fontSize: 11,
-          color: C.txt2,
-          fontStyle: 'italic'
-        }
-      }, GRADES.find(g => g.id === d.grade)?.tip)), /*#__PURE__*/React.createElement(FRow, {
-        label: "Additional Attributes (optional)"
-      }, /*#__PURE__*/React.createElement("div", {
-        style: {
-          display: 'flex',
-          gap: 8,
-          flexWrap: 'wrap'
-        }
-      }, AXES.map(ax => {
-        const checked = (d.axes || []).includes(ax.id);
-        return /*#__PURE__*/React.createElement("label", {
-          key: ax.id,
+      }, defects.map((df, dIdx) => {
+        const g = GRADES.find(x => x.id === df.grade);
+        const bad = !isDefectComplete(df);
+        return /*#__PURE__*/React.createElement("div", {
+          key: df.id,
+          style: {
+            border: `1.5px solid ${bad ? C.amber : g?.color || C.border}`,
+            borderLeft: `5px solid ${g?.color || C.txt2}`,
+            borderRadius: 8,
+            padding: 12,
+            marginBottom: 10,
+            background: C.white
+          }
+        }, /*#__PURE__*/React.createElement("div", {
           style: {
             display: 'flex',
             alignItems: 'center',
-            gap: 6,
-            cursor: 'pointer',
-            padding: '7px 10px',
-            borderRadius: 8,
-            border: `1.5px solid ${checked ? C.txt2 : C.border}`,
-            background: checked ? '#F5F5F5' : C.white,
-            fontSize: 12,
-            fontWeight: checked ? 600 : 400,
-            color: C.txt,
-            userSelect: 'none'
+            marginBottom: 10
           }
-        }, /*#__PURE__*/React.createElement("input", {
-          type: "checkbox",
-          checked: checked,
+        }, /*#__PURE__*/React.createElement("span", {
           style: {
-            width: 14,
-            height: 14,
-            accentColor: C.txt2
-          },
-          onChange: async e => {
-            const axes = e.target.checked ? [...(d.axes || []), ax.id] : (d.axes || []).filter(a => a !== ax.id);
-            let patch = {
-              axes
-            };
-            if (ax.id === 'further_investigation' && e.target.checked && !d.recommendation?.includes('Further investigation')) {
-              patch.recommendation = (d.recommendation || '') + (d.recommendation ? ' ' : '') + 'Further investigation by a specialist is recommended.';
-            }
-            await updItem(item.id, patch);
+            fontFamily: 'monospace',
+            fontSize: 13,
+            fontWeight: 700,
+            color: g?.color || C.txt2
           }
-        }), ax.label);
-      })), /*#__PURE__*/React.createElement("div", {
+        }, df.defectRef), g && /*#__PURE__*/React.createElement("span", {
+          style: {
+            marginLeft: 8,
+            fontSize: 10,
+            fontWeight: 700,
+            padding: '2px 8px',
+            borderRadius: 10,
+            background: g.bg,
+            color: g.color
+          }
+        }, g.label), /*#__PURE__*/React.createElement("div", {
+          style: {
+            flex: 1
+          }
+        }), /*#__PURE__*/React.createElement("button", {
+          onClick: () => removeDefect(item.id, df.id),
+          style: {
+            background: 'none',
+            border: 'none',
+            color: C.danger,
+            fontSize: 12,
+            fontWeight: 600,
+            cursor: 'pointer',
+            padding: '2px 4px'
+          }
+        }, "✕ Delete")), bad && /*#__PURE__*/React.createElement("div", {
+          style: {
+            background: '#FFF8EC',
+            border: `1px solid ${C.amber}`,
+            borderRadius: 6,
+            padding: '8px 10px',
+            marginBottom: 10,
+            fontSize: 11,
+            color: '#D4820A',
+            fontWeight: 600
+          }
+        }, "⚠ Required: Grade + Location + Description + Implication + Recommendation"), df.photos?.length > 0 && /*#__PURE__*/React.createElement("div", {
+          style: {
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 6,
+            marginBottom: 10
+          }
+        }, df.photos.map((ph, idx) => /*#__PURE__*/React.createElement("div", {
+          key: ph.photoId || idx,
+          style: {
+            position: 'relative'
+          }
+        }, /*#__PURE__*/React.createElement(PhotoThumb, {
+          photoRef: ph,
+          onClick: () => setPhotoMod({
+            itemId: item.id,
+            defectId: df.id,
+            idx
+          })
+        }), /*#__PURE__*/React.createElement("button", {
+          onClick: e => {
+            e.stopPropagation();
+            deletePhoto(item.id, df.id, idx);
+          },
+          title: "Remove photo",
+          style: {
+            position: 'absolute',
+            top: -6,
+            right: -6,
+            width: 22,
+            height: 22,
+            borderRadius: '50%',
+            border: 'none',
+            background: C.danger,
+            color: '#fff',
+            fontSize: 12,
+            fontWeight: 700,
+            cursor: 'pointer',
+            lineHeight: 1,
+            boxShadow: '0 1px 4px rgba(0,0,0,.3)'
+          }
+        }, "✕")))), /*#__PURE__*/React.createElement(FRow, {
+          label: "Grade (required)"
+        }, /*#__PURE__*/React.createElement("div", {
+          style: {
+            display: 'flex',
+            gap: 6,
+            flexWrap: 'wrap',
+            marginBottom: 8
+          }
+        }, GRADES.map(gr => /*#__PURE__*/React.createElement("button", {
+          key: gr.id,
+          onClick: () => handleGradeSelect(item.id, df.id, gr.id),
+          title: gr.tip,
+          style: {
+            flex: '1 1 auto',
+            padding: '8px 6px',
+            borderRadius: 8,
+            border: `2px solid ${df.grade === gr.id ? gr.color : C.border}`,
+            background: df.grade === gr.id ? gr.bg : C.white,
+            color: df.grade === gr.id ? gr.color : C.txt2,
+            fontWeight: 700,
+            fontSize: 11,
+            cursor: 'pointer',
+            textAlign: 'center',
+            minWidth: 80
+          }
+        }, gr.id === 'significant' ? '🔴' : gr.id === 'maintenance' ? '🟠' : '🟡', " ", gr.label))), g && /*#__PURE__*/React.createElement("div", {
+          style: {
+            fontSize: 11,
+            color: C.txt2,
+            fontStyle: 'italic'
+          }
+        }, g.tip)), /*#__PURE__*/React.createElement(FRow, {
+          label: "Additional Attributes (optional)"
+        }, /*#__PURE__*/React.createElement("div", {
+          style: {
+            display: 'flex',
+            gap: 8,
+            flexWrap: 'wrap'
+          }
+        }, AXES.map(ax => {
+          const checked = (df.axes || []).includes(ax.id);
+          return /*#__PURE__*/React.createElement("label", {
+            key: ax.id,
+            style: {
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              cursor: 'pointer',
+              padding: '7px 10px',
+              borderRadius: 8,
+              border: `1.5px solid ${checked ? C.txt2 : C.border}`,
+              background: checked ? '#F5F5F5' : C.white,
+              fontSize: 12,
+              fontWeight: checked ? 600 : 400,
+              color: C.txt,
+              userSelect: 'none'
+            }
+          }, /*#__PURE__*/React.createElement("input", {
+            type: "checkbox",
+            checked: checked,
+            style: {
+              width: 14,
+              height: 14,
+              accentColor: C.txt2
+            },
+            onChange: async e => {
+              const axes = e.target.checked ? [...(df.axes || []), ax.id] : (df.axes || []).filter(a => a !== ax.id);
+              const patch = {
+                axes
+              };
+              if (ax.id === 'further_investigation' && e.target.checked && !df.recommendation?.includes('Further investigation')) {
+                patch.recommendation = (df.recommendation || '') + (df.recommendation ? ' ' : '') + 'Further investigation by a specialist is recommended.';
+              }
+              await updDefect(item.id, df.id, patch);
+            }
+          }), ax.label);
+        })), /*#__PURE__*/React.createElement("div", {
+          style: {
+            fontSize: 10,
+            color: C.txt2,
+            marginTop: 4,
+            fontStyle: 'italic'
+          }
+        }, "These are not defect grades — no colour is applied")), /*#__PURE__*/React.createElement(FRow2, null, /*#__PURE__*/React.createElement(FRow, {
+          label: "Material"
+        }, /*#__PURE__*/React.createElement("select", {
+          style: inp,
+          value: df.material || '',
+          onChange: e => updDefect(item.id, df.id, {
+            material: e.target.value
+          })
+        }, /*#__PURE__*/React.createElement("option", {
+          value: ""
+        }, "Select"), MATERIALS.map(o => /*#__PURE__*/React.createElement("option", {
+          key: o
+        }, o)))), /*#__PURE__*/React.createElement("div", null)), /*#__PURE__*/React.createElement(DefectField, {
+          label: "📍 Location *",
+          value: df.location,
+          filled: !!df.location,
+          onCommit: v => updDefect(item.id, df.id, {
+            location: v
+          }),
+          placeholder: "e.g. North elevation, window head, W3"
+        }), /*#__PURE__*/React.createElement(DefectField, {
+          label: "🔍 Description *",
+          value: df.description,
+          filled: !!df.description,
+          rows: 3,
+          onCommit: v => updDefect(item.id, df.id, {
+            description: v
+          }),
+          placeholder: "Observed condition, measurements, extent. Observations only — do not state cause."
+        }), /*#__PURE__*/React.createElement(DefectField, {
+          label: "⚠ Implication *",
+          value: df.implication,
+          filled: !!df.implication,
+          rows: 3,
+          onCommit: v => updDefect(item.id, df.id, {
+            implication: v
+          }),
+          placeholder: "Consequence if not addressed — risk to structure, weather resistance, health, or value"
+        }), /*#__PURE__*/React.createElement(DefectField, {
+          label: "✅ Recommendation *",
+          value: df.recommendation,
+          filled: !!df.recommendation,
+          rows: 3,
+          onCommit: v => updDefect(item.id, df.id, {
+            recommendation: v
+          }),
+          placeholder: "Specific action required, or 'Further investigation by specialist recommended'"
+        }), /*#__PURE__*/React.createElement("div", {
+          style: {
+            display: 'flex',
+            gap: 6,
+            flexWrap: 'wrap',
+            marginTop: 4
+          }
+        }, /*#__PURE__*/React.createElement("button", {
+          onClick: () => {
+            pendingPhotoItem.current = {
+              itemId: item.id,
+              defectId: df.id
+            };
+            fileRef.current.setAttribute('capture', 'environment');
+            fileRef.current.click();
+          },
+          style: {
+            padding: '7px 11px',
+            borderRadius: 6,
+            border: `1px solid ${C.border}`,
+            background: C.white,
+            color: C.txt2,
+            fontSize: 12,
+            cursor: 'pointer'
+          }
+        }, "📷 Camera"), /*#__PURE__*/React.createElement("button", {
+          onClick: () => {
+            pendingPhotoItem.current = {
+              itemId: item.id,
+              defectId: df.id
+            };
+            fileRef.current.removeAttribute('capture');
+            fileRef.current.click();
+          },
+          style: {
+            padding: '7px 11px',
+            borderRadius: 6,
+            border: `1px solid ${C.border}`,
+            background: C.white,
+            color: C.txt2,
+            fontSize: 12,
+            cursor: 'pointer'
+          }
+        }, "🖼 Gallery")));
+      }), /*#__PURE__*/React.createElement("button", {
+        onClick: () => addDefect(item.id),
         style: {
-          fontSize: 10,
-          color: C.txt2,
-          marginTop: 4,
-          fontStyle: 'italic'
-        }
-      }, "These are not defect grades — no colour is applied")), /*#__PURE__*/React.createElement(FRow2, null, /*#__PURE__*/React.createElement(FRow, {
-        label: "Material"
-      }, /*#__PURE__*/React.createElement("select", {
-        style: inp,
-        value: d.material || '',
-        onChange: e => updItem(item.id, {
-          material: e.target.value
-        })
-      }, /*#__PURE__*/React.createElement("option", {
-        value: ""
-      }, "Select"), MATERIALS.map(o => /*#__PURE__*/React.createElement("option", {
-        key: o
-      }, o)))), /*#__PURE__*/React.createElement("div", null)), /*#__PURE__*/React.createElement(FRow, {
-        label: "📍 Location *"
-      }, /*#__PURE__*/React.createElement("input", {
-        style: {
-          ...inp,
-          borderColor: d.location ? C.border : C.amber
-        },
-        value: d.location || '',
-        onChange: e => updItem(item.id, {
-          location: e.target.value
-        }),
-        placeholder: "e.g. North elevation, window head, W3"
-      })), /*#__PURE__*/React.createElement(FRow, {
-        label: "🔍 Description *"
-      }, /*#__PURE__*/React.createElement("textarea", {
-        style: {
-          ...inp,
-          minHeight: 64,
-          resize: 'none',
-          borderColor: d.description ? C.border : C.amber
-        },
-        value: d.description || '',
-        onChange: e => updItem(item.id, {
-          description: e.target.value
-        }),
-        placeholder: "Observed condition, measurements, extent. Observations only — do not state cause."
-      })), /*#__PURE__*/React.createElement(FRow, {
-        label: "⚠ Implication *"
-      }, /*#__PURE__*/React.createElement("textarea", {
-        style: {
-          ...inp,
-          minHeight: 56,
-          resize: 'none',
-          borderColor: d.implication ? C.border : C.amber
-        },
-        value: d.implication || '',
-        onChange: e => updItem(item.id, {
-          implication: e.target.value
-        }),
-        placeholder: "Consequence if not addressed — risk to structure, weather resistance, health, or value"
-      })), /*#__PURE__*/React.createElement(FRow, {
-        label: "✅ Recommendation *"
-      }, /*#__PURE__*/React.createElement("textarea", {
-        style: {
-          ...inp,
-          minHeight: 56,
-          resize: 'none',
-          borderColor: d.recommendation ? C.border : C.amber
-        },
-        value: d.recommendation || '',
-        onChange: e => updItem(item.id, {
-          recommendation: e.target.value
-        }),
-        placeholder: "Specific action required, or 'Further investigation by specialist recommended'"
-      }))) : /*#__PURE__*/React.createElement(FRow, {
-        label: "Comment (optional)"
-      }, /*#__PURE__*/React.createElement("textarea", {
-        style: {
-          ...inp,
-          minHeight: 52,
-          resize: 'none'
-        },
-        value: d.description || '',
-        onChange: e => updItem(item.id, {
-          description: e.target.value
-        }),
-        placeholder: "Add observation if needed…"
-      })), /*#__PURE__*/React.createElement("div", {
-        style: {
-          display: 'flex',
-          gap: 6,
-          flexWrap: 'wrap',
-          marginTop: 4
-        }
-      }, /*#__PURE__*/React.createElement("button", {
-        onClick: () => {
-          pendingPhotoItem.current = item.id;
-          fileRef.current.setAttribute('capture', 'environment');
-          fileRef.current.click();
-        },
-        style: {
-          padding: '7px 11px',
-          borderRadius: 6,
-          border: `1px solid ${C.border}`,
+          width: '100%',
+          padding: '10px',
+          borderRadius: 8,
+          border: `1.5px dashed ${C.danger}`,
           background: C.white,
-          color: C.txt2,
-          fontSize: 12,
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 4
+          color: C.danger,
+          fontSize: 13,
+          fontWeight: 700,
+          cursor: 'pointer'
         }
-      }, "📷 Camera"), /*#__PURE__*/React.createElement("button", {
-        onClick: () => {
-          pendingPhotoItem.current = item.id;
-          fileRef.current.removeAttribute('capture');
-          fileRef.current.click();
-        },
-        style: {
-          padding: '7px 11px',
-          borderRadius: 6,
-          border: `1px solid ${C.border}`,
-          background: C.white,
-          color: C.txt2,
-          fontSize: 12,
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 4
-        }
-      }, "🖼 Gallery"))));
+      }, "⚑ + Add ", defects.length ? 'another ' : '', "defect to ", item.l)));
     }), /*#__PURE__*/React.createElement("div", {
       style: {
         height: 10
@@ -4269,6 +4483,7 @@ function App() {
     const errors = validateReport(cur);
     const sigPct = flagN > 0 ? Math.round(sigN / flagN * 100) : 0;
     return /*#__PURE__*/React.createElement(Layout, {
+      ui: ui,
       title: "Summary & Report"
     }, /*#__PURE__*/React.createElement("div", {
       style: {
@@ -4372,7 +4587,7 @@ function App() {
         color: cur.wt.rating === 'HIGH' ? '#C62828' : cur.wt.rating === 'MEDIUM' ? '#EF6C00' : C.done
       }
     }, cur.wt.rating, " RISK PROFILE")))), GRADES.map(g => {
-      const items = flaggedItems.filter(([, d]) => d.grade === g.id);
+      const items = defectList.filter(df => df.grade === g.id);
       if (!items.length) return null;
       return /*#__PURE__*/React.createElement(Card, {
         key: g.id,
@@ -4381,11 +4596,9 @@ function App() {
         }
       }, /*#__PURE__*/React.createElement(SecTitle, {
         color: g.color
-      }, g.id === 'significant' ? '🔴' : g.id === 'maintenance' ? '🟠' : '🟡', " ", g.label, " (", items.length, ")"), items.map(([itemId, d]) => {
-        const catObj = CATS.find(c => c.items.find(i => i.id === itemId));
-        const itemObj = catObj?.items.find(i => i.id === itemId);
+      }, g.id === 'significant' ? '🔴' : g.id === 'maintenance' ? '🟠' : '🟡', " ", g.label, " (", items.length, ")"), items.map(d => {
         return /*#__PURE__*/React.createElement("div", {
-          key: itemId,
+          key: d.id,
           style: {
             padding: '8px 0',
             borderBottom: `1px solid ${C.border}`
@@ -4397,7 +4610,13 @@ function App() {
             color: C.txt,
             marginBottom: 2
           }
-        }, catObj?.label.replace(/^\d+\.\s/, ''), " › ", itemObj?.l, (d.axes || []).map(ax => /*#__PURE__*/React.createElement("span", {
+        }, /*#__PURE__*/React.createElement("span", {
+          style: {
+            fontFamily: 'monospace',
+            marginRight: 6,
+            color: g.color
+          }
+        }, d.defectRef), d.catShort, " › ", d.item, (d.axes || []).map(ax => /*#__PURE__*/React.createElement("span", {
           key: ax,
           style: {
             marginLeft: 6,
@@ -4760,8 +4979,8 @@ function App() {
 
   // Photo modal
   if (photoMod && cur) {
-    const d = cur.items[photoMod.itemId];
-    const photoRef = d?.photos?.[photoMod.idx];
+    const df = (cur.items[photoMod.itemId]?.defects || []).find(x => x.id === photoMod.defectId);
+    const photoRef = df?.photos?.[photoMod.idx];
     return /*#__PURE__*/React.createElement("div", {
       style: {
         position: 'fixed',
@@ -4805,19 +5024,18 @@ function App() {
         textAlign: 'center'
       },
       placeholder: "Caption (required for report)",
-      value: photoRef?.caption || '',
-      onChange: async e => {
-        const photos = [...d.photos];
-        photos[photoMod.idx] = {
-          ...photos[photoMod.idx],
+      defaultValue: photoRef?.caption || '',
+      onBlur: e => {
+        const photos = df.photos.map((p, n) => n === photoMod.idx ? {
+          ...p,
           caption: e.target.value
-        };
-        await updItem(photoMod.itemId, {
+        } : p);
+        updDefect(photoMod.itemId, photoMod.defectId, {
           photos
         });
       }
     }), /*#__PURE__*/React.createElement("button", {
-      onClick: () => deletePhoto(photoMod.itemId, photoMod.idx),
+      onClick: () => deletePhoto(photoMod.itemId, photoMod.defectId, photoMod.idx),
       style: {
         marginTop: 12,
         background: C.danger,
