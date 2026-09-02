@@ -1,0 +1,2457 @@
+/**
+ * WWW Property Inspection App — v3.3
+ * NZS 4306:2005 residential property inspection — factual field data capture.
+ *
+ * v3.3: All AI/API features removed. The app makes no network calls for content.
+ *       Executive Summary is assembled deterministically from recorded entries
+ *       (see buildExecSummary) and is fully editable before report generation.
+ */
+const { useState, useEffect, useRef, useCallback } = React;
+
+// ─── SERVICE WORKER REGISTRATION ────────────────────────────
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .then(reg => {
+        reg.addEventListener('updatefound', () => {
+          const nw = reg.installing;
+          nw?.addEventListener('statechange', () => {
+            if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+              // New version available — notify UI (handled by swUpdate state)
+              window.__swUpdateAvailable = true;
+            }
+          });
+        });
+      })
+      .catch(err => console.warn('[SW] Registration failed (expected in dev):', err));
+  });
+}
+
+// ─── INDEXEDDB LAYER ────────────────────────────────────────
+const DB_NAME = 'wwwInspection';
+const DB_VERSION = 1;
+let _dbInstance = null;
+
+async function openDB() {
+  if (_dbInstance) return _dbInstance;
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = e => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('inspections')) {
+        db.createObjectStore('inspections', { keyPath: 'id' });
+      }
+      if (!db.objectStoreNames.contains('photos')) {
+        const ph = db.createObjectStore('photos', { keyPath: 'photoId' });
+        ph.createIndex('byInspection', 'inspectionId', { unique: false });
+        ph.createIndex('byDefect', 'defectRef', { unique: false });
+      }
+    };
+    req.onsuccess = e => { _dbInstance = e.target.result; resolve(_dbInstance); };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function dbTx(storeName, mode, fn) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, mode);
+    const store = tx.objectStore(storeName);
+    try {
+      const req = fn(store);
+      if (req && req.onsuccess !== undefined) {
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      } else {
+        tx.oncomplete = () => resolve(req);
+        tx.onerror = () => reject(tx.error);
+      }
+    } catch (err) { reject(err); }
+  });
+}
+
+const dbGetAll = store => dbTx(store, 'readonly', s => s.getAll());
+const dbGet = (store, key) => dbTx(store, 'readonly', s => s.get(key));
+const dbPut = (store, data) => dbTx(store, 'readwrite', s => s.put(data));
+const dbDelete = (store, key) => dbTx(store, 'readwrite', s => s.delete(key));
+async function dbGetByIndex(store, indexName, value) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(store, 'readonly');
+    const req = tx.objectStore(store).index(indexName).getAll(value);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+// Read-back verification
+async function dbPutVerified(store, data) {
+  await dbPut(store, data);
+  const key = data[store === 'photos' ? 'photoId' : 'id'];
+  const readback = await dbGet(store, key);
+  if (!readback) throw new Error(`Read-back failed for ${store}/${key}`);
+  return readback;
+}
+
+// ─── LOCALSTORAGE MIGRATION ──────────────────────────────────
+async function migrateFromLocalStorage() {
+  const LS_KEYS = ['www_insp_v3', 'www_insp_v2', 'www_inspections_v1', 'www_inspections'];
+  let raw = null;
+  let foundKey = null;
+  for (const k of LS_KEYS) {
+    const v = localStorage.getItem(k);
+    if (v) { raw = v; foundKey = k; break; }
+  }
+  if (!raw) return 0;
+
+  let inspections = [];
+  try { inspections = JSON.parse(raw); } catch { return 0; }
+  if (!Array.isArray(inspections) || !inspections.length) return 0;
+
+  let migrated = 0;
+  for (const ins of inspections) {
+    try {
+      const migratedItems = {};
+      for (const [itemId, itemData] of Object.entries(ins.items || {})) {
+        const photoRefs = [];
+        const oldPhotos = itemData.photos || [];
+        for (let i = 0; i < oldPhotos.length; i++) {
+          const ph = oldPhotos[i];
+          const base64 = typeof ph === 'string' ? ph : ph?.data;
+          if (!base64 || !base64.startsWith('data:')) continue;
+          try {
+            const blob = await fetch(base64).then(r => r.blob());
+            const photoId = gid();
+            await dbPut('photos', {
+              photoId,
+              inspectionId: ins.id,
+              defectRef: itemId,
+              seq: i + 1,
+              blob,
+              caption: ph?.caption || '',
+              savedToDevice: false,
+              saveStatus: 'ok',
+              createdAt: new Date().toISOString(),
+            });
+            photoRefs.push({ photoId, num: ph?.num || i + 1, caption: ph?.caption || '', saveStatus: 'ok', savedToDevice: false });
+          } catch { /* skip failed photo */ }
+        }
+        migratedItems[itemId] = { ...itemData, photos: photoRefs };
+      }
+      await dbPut('inspections', { ...ins, items: migratedItems, _migrated: true });
+      migrated++;
+    } catch (err) { console.warn('Migration error for inspection:', ins.id, err); }
+  }
+
+  // Remove old LS data
+  LS_KEYS.forEach(k => localStorage.removeItem(k));
+  console.log(`[Migration] Migrated ${migrated} inspections from LocalStorage`);
+  return migrated;
+}
+
+// ─── IMAGE UTILITIES ─────────────────────────────────────────
+async function compressImage(file, maxEdge = 1600, quality = 0.75) {
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    return await new Promise((resolve, reject) =>
+      canvas.toBlob(b => b ? resolve(b) : reject(new Error('toBlob returned null')), 'image/jpeg', quality)
+    );
+  } catch (err) {
+    console.warn('[Compress] Falling back to original:', err);
+    return file.slice(); // return as Blob
+  }
+}
+
+function saveToDevice(blob, filename) {
+  try {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    return true;
+  } catch { return false; }
+}
+
+function photoFilename(fileNo, defectRef, seq) {
+  const n = new Date();
+  const dt = `${n.getFullYear()}${String(n.getMonth()+1).padStart(2,'0')}${String(n.getDate()).padStart(2,'0')}-${String(n.getHours()).padStart(2,'0')}${String(n.getMinutes()).padStart(2,'0')}`;
+  const safeRef = (defectRef || 'unknown').replace(/[^a-zA-Z0-9-]/g, '-');
+  return `${fileNo || 'wpi'}_${safeRef}_${String(seq).padStart(3,'0')}_${dt}.jpg`;
+}
+
+// ─── STORAGE MONITORING ──────────────────────────────────────
+async function checkStorageQuota() {
+  if (!navigator.storage?.estimate) return null;
+  try {
+    const { usage, quota } = await navigator.storage.estimate();
+    await navigator.storage.persist?.();
+    return { usage, quota, pct: quota ? Math.round(usage / quota * 100) : 0 };
+  } catch { return null; }
+}
+
+// ─── CONSTANTS ───────────────────────────────────────────────
+const APP_VERSION = 'v3.6';
+const APP_DATE = '2026-09-02'; // Update this on each release
+const APP_VER_DISPLAY = `${APP_VERSION} · ${APP_DATE}`;
+
+const ST = { pending: 'PENDING', done: 'DONE', na: 'N/A' };
+
+// 3-tier defect grades (v3.1 §C)
+const GRADES = [
+  { id: 'significant', label: 'Significant Defect', color: '#C62828', bg: '#FFEBEE',
+    tip: 'Substantial repair or urgent action required. Cannot be resolved by maintenance.' },
+  { id: 'maintenance', label: 'Significant Maintenance', color: '#EF6C00', bg: '#FFF3E0',
+    tip: 'Large/visible, but resolvable by maintenance. Short-term risk to building fabric if ignored.' },
+  { id: 'deterioration', label: 'Gradual Deterioration', color: '#F9A825', bg: '#FFFDE7',
+    tip: 'Natural wear has reached a point where maintenance or replacement is required.' },
+];
+
+// Separate axes — no color (v3.1 §C)
+const AXES = [
+  { id: 'particular_attribute', label: 'Particular Attribute',
+    tip: 'Not a defect. A characteristic affecting desirability or function. No colour applied.' },
+  { id: 'further_investigation', label: 'Further Investigation Required',
+    tip: 'An action, not a grade. Auto-inserts text in Recommendation field.' },
+];
+
+const WEATHER = ['Fine','Overcast','Raining','Windy','Hot','Cold'];
+const SOIL = ['Dry','Moist','Wet','Saturated'];
+const OCCUPANCY = ['Vacant','Owner Occupied','Tenanted','Under Construction'];
+// ── Dropdown lists (Items 06–09) ──────────────────────────────
+const ZONE_CLIMATE = ['Zone 1','Zone 2','Zone 3','Not recorded','Not determined'];
+const ZONE_EXPOSURE = ['Zone A','Zone B','Zone C','Zone D','Not recorded','Not determined'];
+const ZONE_WIND = ['Low','Medium','High','Very High','Extra High','Not recorded','Not determined'];
+const ZONE_EQ = ['Zone 1','Zone 2','Zone 3','Not recorded','Not determined'];
+const CURR_YEAR = new Date().getFullYear();
+const MATERIALS = ['Plaster','Timber','Aluminium','uPVC','Steel','Concrete','Brick','Fibre Cement','Glass','Rubber','Other'];
+const METERS = ['Protimeter Surveymaster','Tramex CME5','Tramex ME5','Flir MR160','Other'];
+
+const WT_FACTORS = [
+  { id:'cladding_type', label:'Cladding System', options:['EIFS direct-fixed (no cavity)','EIFS with cavity','Brick veneer','Weatherboard','Harditex','Stucco','Other'], highRisk:['EIFS direct-fixed (no cavity)','Stucco'] },
+  { id:'eaves', label:'Roof Eaves', options:['Full eaves (>450mm)','Minimal eaves (<200mm)','No eaves'], highRisk:['No eaves','Minimal eaves (<200mm)'] },
+  { id:'era', label:'Construction Era', options:['Pre-1990','1990–2004','Post-2004'], highRisk:['1990–2004'] },
+  { id:'levels', label:'Number of Levels', options:['Single storey','Two storey','Three+ storey'], highRisk:['Three+ storey'] },
+  { id:'complexity', label:'Design Complexity', options:['Simple (few junctions)','Moderate','Complex (many junctions)'], highRisk:['Complex (many junctions)'] },
+  { id:'balconies', label:'Balconies over Living', options:['None','Present — waterproofed','Present — condition unknown'], highRisk:['Present — condition unknown'] },
+  { id:'head_flashings', label:'Head Flashings', options:['Visible and intact','Not visible / concealed','Absent'], highRisk:['Absent'] },
+  { id:'ground_clearance', label:'Ground Clearances', options:['Adequate (NZS compliant)','Reduced','Non-compliant'], highRisk:['Non-compliant'] },
+  { id:'penetrations', label:'Penetration Sealing', options:['Well sealed','Partial','Poor or absent'], highRisk:['Poor or absent'] },
+  { id:'moisture_level', label:'Moisture Readings', options:['All normal','Some elevated','High readings recorded'], highRisk:['High readings recorded'] },
+];
+
+const calcWTRisk = factors => {
+  let h = 0;
+  WT_FACTORS.forEach(f => { if (factors[f.id] && f.highRisk.includes(factors[f.id])) h++; });
+  return h >= 3 ? 'HIGH' : h >= 1 ? 'MEDIUM' : 'LOW';
+};
+
+const CATS = [
+  { id:'site', label:'1. Site', icon:'🏞️', items:[
+    {id:'site_orient',l:'Orientation & Site Exposure'},{id:'site_contour',l:'Contour & Vegetation'},
+    {id:'site_ret',l:'Retaining Walls'},{id:'site_paths',l:'Paths, Steps & Handrails'},
+    {id:'site_drive',l:'Driveway'},{id:'site_fence',l:'Fencing & Gates'},{id:'site_drain',l:'Surface Water Control'},
+  ]},
+  { id:'sub', label:'2. Subfloor', icon:'🔧', items:[
+    {id:'sub_access',l:'Access & Foundation Type'},{id:'sub_ground',l:'Ground Condition & Vapour Barrier'},
+    {id:'sub_vent',l:'Ventilation & Drainage'},{id:'sub_frame',l:'Timber Framing — Ground Clearance'},
+    {id:'sub_insul',l:'Underfloor Insulation'},{id:'sub_services',l:'Subfloor Services (Plumbing/Electrical)'},
+    {id:'sub_pest',l:'Pest, Borer & Rot'},{id:'sub_debris',l:'Debris & Stored Materials'},
+  ]},
+  { id:'ext', label:'3. Exterior', icon:'🏠', items:[
+    {id:'ext_clad',l:'Cladding System & Condition'},{id:'ext_clearance',l:'Ground & Deck Clearances'},
+    {id:'ext_sealant',l:'Sealants & Penetrations'},{id:'ext_flash',l:'Head Flashings & Wall Flashings'},
+    {id:'ext_win',l:'Windows & Glazing'},{id:'ext_door',l:'Exterior Doors'},
+    {id:'ext_deck',l:'Decks & Balconies'},{id:'ext_moist',l:'Exterior Moisture Readings'},
+  ]},
+  { id:'roof', label:'4. Roof', icon:'🏗️', items:[
+    {id:'roof_cov',l:'Roof Covering & Pitch'},{id:'roof_gut',l:'Gutters & Downpipes'},
+    {id:'roof_flash',l:'Flashings & Ridge Cap'},{id:'roof_sky',l:'Skylights & Penetrations'},
+    {id:'roof_chim',l:'Chimney / Flue'},{id:'roof_access',l:'Roof Access / Limitations'},
+  ]},
+  { id:'roofspace', label:'5. Roof Space', icon:'🔦', items:[
+    {id:'rs_access',l:'Access & Accessibility'},{id:'rs_struct',l:'Roof Structure'},
+    {id:'rs_insul',l:'Insulation'},{id:'rs_vent',l:'Ventilation'},{id:'rs_pest',l:'Pest & Moisture'},
+  ]},
+  { id:'int', label:'6. Interior', icon:'🛋️', items:[
+    {id:'int_ceil',l:'Ceilings'},{id:'int_wall',l:'Interior Walls'},
+    {id:'int_floor',l:'Floor Coverings'},{id:'int_door',l:'Interior Doors'},{id:'int_stair',l:'Stairs & Handrails'},
+    {id:'int_storage',l:'Built-in Storage / Wardrobes'},
+  ]},
+  { id:'kitchen', label:'7. Kitchen', icon:'🍳', items:[
+    {id:'kit_fit',l:'Fittings & Fixtures'},{id:'kit_plumb',l:'Plumbing (visible)'},
+    {id:'kit_bench',l:'Benchtops & Cabinetry'},{id:'kit_vent',l:'Ventilation & Rangehood'},
+  ]},
+  { id:'bath', label:'8. Bathrooms', icon:'🚿', items:[
+    {id:'bath_1',l:'Bathroom 1 — Wet Areas & Sealing'},{id:'bath_2',l:'Bathroom 2 — Wet Areas & Sealing'},
+    {id:'bath_toilet',l:'Separate Toilet'},{id:'bath_vent',l:'Bathroom Ventilation'},
+    {id:'bath_moist1',l:'Bathroom 1 Moisture Readings'},{id:'bath_moist2',l:'Bathroom 2 Moisture Readings'},
+  ]},
+  { id:'laundry', label:'9. Laundry', icon:'🧺', items:[
+    {id:'lau_fit',l:'Fittings & Drainage'},{id:'lau_plumb',l:'Plumbing (visible)'},{id:'lau_vent',l:'Ventilation'},
+  ]},
+  { id:'garage', label:'10. Garage', icon:'🚗', items:[
+    {id:'gar_struct',l:'Structure & Condition'},{id:'gar_door',l:'Door & Access'},{id:'gar_other',l:'Conversion / Other Use'},
+  ]},
+  { id:'general', label:'11. General', icon:'⚡', items:[
+    {id:'gen_elec',l:'Electrical (visible)'},{id:'gen_plumb',l:'Plumbing (visible)'},
+    {id:'gen_hvac',l:'Heating & Ventilation — make/model/location'},
+    {id:'gen_hw',l:'Hot Water System'},{id:'gen_gas',l:'Gas System'},
+    {id:'gen_pest',l:'Pest — presence or absence'},{id:'gen_other',l:'Other Systems (vacuum, alarm, earthing rod)'},
+  ]},
+  { id:'moisture', label:'12. Moisture Test', icon:'💧', items:[
+    {id:'mo_setup',l:'Meter Setup & Control Reading'},{id:'mo_ext',l:'Exterior Readings'},
+    {id:'mo_bath',l:'Bathroom Readings'},{id:'mo_other',l:'Other Location Readings'},
+  ]},
+  { id:'thermal', label:'13. Thermal Test', icon:'🌡️', items:[
+    {id:'th_setup',l:'Camera & Test Conditions'},{id:'th_findings',l:'Thermal Findings & Images'},
+  ]},
+];
+
+// ─── HELPERS ─────────────────────────────────────────────────
+const gid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+const todayStr = () => new Date().toISOString().split('T')[0];
+const fmtDate = d => d ? new Date(d+'T12:00:00').toLocaleDateString('en-NZ',{day:'numeric',month:'long',year:'numeric'}) : '—';
+const genFileNo = () => {
+  const n = new Date();
+  return `wpi${String(n.getDate()).padStart(2,'0')}${String(n.getMonth()+1).padStart(2,'0')}${String(n.getFullYear()).slice(2)}-01`;
+};
+
+function blankItem() {
+  // A checklist item holds zero or more defects. status is the item's own state.
+  return { status:ST.pending, defects:[] };
+}
+
+function blankDefect() {
+  return { id: gid(), defectRef:'', location:'', description:'', implication:'',
+           recommendation:'', grade:'', axes:[], material:'', photos:[] };
+}
+
+// Every defect across the inspection, in D-XX order, with its item/category context.
+function allDefects(ins) {
+  const out = [];
+  CATS.forEach(cat => cat.items.forEach(item => {
+    (ins.items?.[item.id]?.defects || []).forEach(df => {
+      out.push({ ...df, itemId:item.id, item:item.l,
+                 cat:cat.label, catId:cat.id, catShort:cat.label.replace(/^\d+\.\s/,'') });
+    });
+  }));
+  return out.sort((a,b) =>
+    parseInt((a.defectRef||'D-99').replace('D-',''),10) -
+    parseInt((b.defectRef||'D-99').replace('D-',''),10));
+}
+
+function isDefectComplete(df) {
+  return !!(df.location && df.description && df.implication && df.recommendation && df.grade);
+}
+
+// ── generalInfo helpers (Items 06–12) ─────────────────────────
+function blankGeneralInfo() {
+  return {
+    schemaVersion: 3,
+    address: { asPerTitle: '' },
+
+    // Building characteristics — free prose, matching the report document order.
+    // Each field is written as it will appear in the report.
+    bc: {
+      age: '',                  // "Approximately 25 years old (constructed 2000)."
+      buildingType: '',         // "Residential two-storey detached dwelling"
+      levels: '',               // "Two storeys."
+      orientation: '',          // "The dwelling fronts the main street and is oriented generally to the north."
+      siteExposure: '',         // Climate / Exposure / Wind zones as prose
+      contourVegetation: '',
+      wallCladding: '',
+      constructionType: '',
+      roofCladding: '',
+      roofDesign: '',
+      foundationType: '',
+      furnished: '',
+      alterations: '',          // "Recent redecoration or repairs" — narrative / bulleted
+      addedFlashings: '',
+      note: ''
+    },
+
+    // Services block
+    services: { water: '', sewage: '', gas: '' },
+
+    // Zone values kept discrete for the Site section (1.2) and the WT matrix
+    zones: { climate: '', exposure: '', wind: '', eq: '' },
+
+    scopeLimitations: ''
+  };
+}
+
+// v3 stored one defect per checklist item. v4 stores an array, so an item
+// such as 'Cladding' can carry cracking, failed sealant and clearance issues
+// as separate numbered defects.
+function migrateItemsToV4(ins) {
+  if (ins._itemsV4) return { items: ins.items, migrated: false };
+  const items = {};
+  let touched = false;
+  Object.entries(ins.items || {}).forEach(([id, it]) => {
+    if (Array.isArray(it.defects)) { items[id] = it; return; }
+    if (it.flagged) {
+      touched = true;
+      items[id] = { status: it.status || ST.done, defects: [{
+        id: gid(),
+        defectRef: it.defectRef || '',
+        location: it.location || '', description: it.description || '',
+        implication: it.implication || '', recommendation: it.recommendation || '',
+        grade: it.grade || '', axes: it.axes || [], material: it.material || '',
+        photos: it.photos || [],
+      }] };
+    } else {
+      // Unflagged item: keep status; any stray photos/comment are dropped from
+      // the defect model but the item itself is preserved.
+      items[id] = { status: it.status || ST.pending, defects: [] };
+      if (it.photos?.length || it.description) touched = true;
+    }
+  });
+  return { items, migrated: touched };
+}
+
+function migrateToV3(ins) {
+  const gi = ins.generalInfo || {};
+  if (gi.schemaVersion === 3) return { ins, migrated: false };
+
+  const out = blankGeneralInfo();
+  const old = ins.bldg || {};
+  const CY = new Date().getFullYear();
+
+  out.address.asPerTitle = gi.address?.asPerTitle || ins.insp?.address || '';
+
+  // ── Age: v2 stored year/decade; v3 stores the sentence that goes in the report
+  const a = gi.age || {};
+  if (a.mode === 'year' && a.yearBuilt) {
+    out.bc.age = `Approximately ${CY - parseInt(a.yearBuilt)} years old (constructed ${a.yearBuilt}).`;
+  } else if (a.mode === 'decade' && a.decade) {
+    out.bc.age = `Constructed in the ${a.decade}.`;
+  } else if (old.age) {
+    out.bc.age = `Approximately ${old.age} years old.`;
+  }
+
+  out.bc.buildingType = gi.buildingType?.value || old.type || '';
+  out.bc.levels = gi.storeys?.value || old.storeys || '';
+  out.bc.furnished = old.furnished || '';
+
+  // ── Characteristics: collapse v2 multi-entry arrays into a single sentence
+  const flat = (arr) => (arr || [])
+    .map(e => {
+      const t = e.type === 'Other (specify)' ? (e.typeOther || '') : (e.type || '');
+      return t && e.area ? `${t} (${e.area})` : t;
+    })
+    .filter(Boolean).join('; ');
+
+  out.bc.wallCladding     = flat(gi.characteristics?.cladding)     || old.cladding || '';
+  out.bc.constructionType = flat(gi.characteristics?.construction) || old.construction || '';
+  out.bc.roofCladding     = flat(gi.characteristics?.roof)         || old.roof || '';
+  out.bc.foundationType   = flat(gi.characteristics?.foundation)   || old.foundation || '';
+
+  // ── Zones: keep discrete values, and build the Site Exposure sentence
+  out.zones = {
+    climate:  gi.zones?.climate  || old.climateZone || '',
+    exposure: gi.zones?.exposure || old.exposureZone || '',
+    wind:     gi.zones?.wind     || old.windZone || '',
+    eq:       gi.zones?.eq       || old.earthquakeZone || '',
+  };
+  const zp = [];
+  if (out.zones.climate)  zp.push(`Climate ${out.zones.climate}`);
+  if (out.zones.exposure) zp.push(`Exposure ${out.zones.exposure}`);
+  if (out.zones.wind)     zp.push(`Wind Zone ${out.zones.wind}`);
+  if (zp.length) out.bc.siteExposure = `The site is located within ${zp.join(', ')}.`;
+
+  // ── Alterations: v2 repeating cards → narrative bullets
+  if (Array.isArray(gi.alterations) && gi.alterations.length) {
+    out.bc.alterations = gi.alterations.map(al => {
+      const bits = [al.description];
+      if (al.year) bits.push(`(${al.year})`);
+      if (al.consentNo) bits.push(`Consent ${al.consentNo}`);
+      if (al.consentStatus) bits.push(al.consentStatus);
+      return '\u2022 ' + bits.filter(Boolean).join(' — ');
+    }).join('\n');
+  } else if (old.alterations) {
+    out.bc.alterations = old.alterations;
+  }
+
+  out.scopeLimitations = gi.scopeLimitations || '';
+
+  return { ins: { ...ins, generalInfo: out, _migratedToV3: true }, migrated: true };
+}
+
+function blankInspection() {
+  const items = {};
+  CATS.forEach(c => c.items.forEach(i => { items[i.id] = blankItem(); }));
+  return {
+    id: gid(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    fileNo: genFileNo(),
+    client: { name:'', phone:'', email:'', address:'', delivery:'By Email', payment:'N/A' },
+    insp: { date:todayStr(), time:'09:00', address:'', scope:'House condition inspection',
+            inspector:'In Hyun Oh (Philip Oh)', qualifications:'LBP BP140132 — Carpentry',
+            weather:'', soil:'', occupancy:'', people:'',
+            areasNotInspected:'Concealed building elements, areas not accessible at time of inspection' },
+    generalInfo: blankGeneralInfo(),
+    wt: { factors:{}, rating:'', context:'', invasive:'Recommended' },
+    moisture: { meterMake:'Protimeter Surveymaster', meterType:'Non-invasive (capacitance)', controlLocation:'', controlReading:'', readings:[] },
+    items, catPhotos: {}, execSummary:'', notes:'',
+    saveDevicePhotos: true,  // Phase A: default ON
+  };
+}
+
+function calcPct(ins) {
+  const all = CATS.flatMap(c => c.items.map(i => i.id));
+  return Math.round(all.filter(id => ins.items[id]?.status !== ST.pending).length / all.length * 100);
+}
+
+function catSt(catId, ins) {
+  const cat = CATS.find(c => c.id === catId);
+  const ss = cat.items.map(i => ins.items[i.id]?.status);
+  if (ss.every(s => s === ST.na)) return ST.na;
+  if (ss.every(s => s !== ST.pending)) return ST.done;
+  return ST.pending;
+}
+
+function itemHasIncomplete(d) {
+  return (d?.defects || []).some(df => !isDefectComplete(df));
+}
+
+function validateReport(ins) {
+  const errors = [];
+  if (!ins.wt.rating) errors.push({ msg:'Weathertightness Risk Rating must be set', section:'info' });
+  if (!ins.insp.address) errors.push({ msg:'Property address is required', section:'info' });
+  if (!ins.client.name) errors.push({ msg:'Client name is required', section:'info' });
+  if (!ins.insp.date) errors.push({ msg:'Inspection date is required', section:'info' });
+  if (!ins.insp.inspector) errors.push({ msg:'Inspector name is required', section:'info' });
+  if (!ins.insp.weather) errors.push({ msg:'Weather conditions required', section:'info' });
+  if (!ins.insp.areasNotInspected) errors.push({ msg:'Areas not inspected must be completed', section:'info' });
+
+  CATS.forEach(cat => cat.items.forEach(item => {
+    (ins.items[item.id]?.defects || []).forEach(df => {
+      const ref = df.defectRef || item.l;
+      const where = `${cat.label} — ${item.l} (${ref})`;
+      if (!df.location) errors.push({ msg:`${where}: Location required`, section:'checklist', catId:cat.id });
+      if (!df.description) errors.push({ msg:`${where}: Description required`, section:'checklist', catId:cat.id });
+      if (!df.implication) errors.push({ msg:`${where}: Implication required`, section:'checklist', catId:cat.id });
+      if (!df.recommendation) errors.push({ msg:`${where}: Recommendation required`, section:'checklist', catId:cat.id });
+      if (!df.grade) errors.push({ msg:`${where}: Grade must be selected`, section:'checklist', catId:cat.id });
+    });
+  }));
+
+  const hasReadings = ins.moisture.readings.length > 0;
+  if (hasReadings && !ins.moisture.meterMake) errors.push({ msg:'Moisture Test: Meter make/model required', section:'summary' });
+  if (hasReadings && !ins.moisture.controlReading) errors.push({ msg:'Moisture Test: Control reading required', section:'summary' });
+
+  return errors;
+}
+
+// ─── EXECUTIVE SUMMARY BUILDER (deterministic — no AI) ───────
+// Assembles the summary only from recorded defect entries.
+// No generated prose; every sentence traces to entered data.
+function buildExecSummary(ins) {
+  const gi = ins.generalInfo || {};
+  const addr = gi.address?.asPerTitle || ins.insp?.address || '—';
+  const out = [];
+
+  // ── 1. Opening
+  out.push(
+    `This report records the findings of a visual, non-invasive residential property inspection ` +
+    `carried out at ${addr} on ${fmtDate(ins.insp?.date)} for ${ins.client?.name || 'the client'}. ` +
+    `The inspection was carried out in accordance with NZS 4306:2005 Residential Property Inspection. ` +
+    `Scope: ${ins.insp?.scope || '—'}.`
+  );
+
+  // ── 2. Weathertightness risk rating (lead item per BOINZ)
+  const rating = ins.wt?.rating || '';
+  if (rating) {
+    let wtPara = `The property has been assessed as carrying a ${rating} weathertightness risk profile.`;
+    const hiFactors = WT_FACTORS
+      .filter(f => ins.wt.factors?.[f.id] && f.highRisk.includes(ins.wt.factors[f.id]))
+      .map(f => `${f.label}: ${ins.wt.factors[f.id]}`);
+    if (hiFactors.length) {
+      wtPara += ` The following risk factors were recorded: ${hiFactors.join('; ')}.`;
+    }
+    if (ins.wt.context) wtPara += ` ${ins.wt.context}`;
+    out.push(wtPara);
+  } else {
+    out.push('A weathertightness risk rating has not been recorded for this property.');
+  }
+
+  // ── 3. Significant Defects (only — no maintenance items)
+  const sig = allDefects(ins).filter(df => df.grade === 'significant');
+
+  if (sig.length) {
+    out.push(
+      `${sig.length} item${sig.length > 1 ? 's have' : ' has'} been graded as a Significant Defect. ` +
+      `${sig.length > 1 ? 'These are' : 'This is'} summarised below. ` +
+      `Full entries, including implications and recommendations, are set out in the body of this report.`
+    );
+    sig.forEach(d => {
+      out.push(`${d.defectRef || '—'} — ${d.catShort}, ${d.item}. Location: ${d.location || '—'}. ${d.description || '—'}`);
+    });
+  } else {
+    out.push('No items have been graded as a Significant Defect.');
+  }
+
+  // ── 4. Further investigation items
+  const fi = allDefects(ins)
+    .filter(df => (df.axes || []).includes('further_investigation'))
+    .map(df => df.defectRef || df.item);
+  if (fi.length) {
+    out.push(`Further investigation is recommended in respect of the following items: ${fi.join(', ')}.`);
+  }
+
+  // ── 5. Elevated moisture readings
+  const ctrl = parseFloat(ins.moisture?.controlReading);
+  const elevated = (ins.moisture?.readings || []).filter(r => {
+    const v = parseFloat(r.value);
+    return !isNaN(v) && !isNaN(ctrl) && v - ctrl >= 5;
+  });
+  if (elevated.length) {
+    out.push(
+      `${elevated.length} moisture reading${elevated.length > 1 ? 's were' : ' was'} recorded at 5% WME or more above ` +
+      `the control reading of ${ins.moisture.controlReading}% WME taken at ${ins.moisture.controlLocation || '—'}. ` +
+      `Readings were taken with a ${ins.moisture.meterMake || '—'} in ${ins.moisture.meterType || '—'} mode. ` +
+      `Full results are tabulated in the Moisture Test Results section.`
+    );
+  }
+
+  // ── 6. Scope limitations
+  out.push(
+    `This inspection was visual and non-invasive. Concealed building elements, including those within wall cavities, ` +
+    `beneath floor coverings and above ceiling linings, were not inspected and are excluded from this report. ` +
+    `Areas not inspected: ${ins.insp?.areasNotInspected || '—'}.`
+  );
+
+  // ── 7. HIGH risk — invasive testing + precedent
+  if (rating === 'HIGH') {
+    out.push(
+      `Where a property is assessed as carrying a HIGH weathertightness risk profile, a non-invasive inspection ` +
+      `alone cannot establish whether moisture ingress has occurred within concealed framing. Invasive moisture ` +
+      `testing by a suitably qualified specialist is recommended before any purchase decision is made. ` +
+      `This recommendation is made having regard to Hepburn v Cunningham.`
+    );
+  }
+
+  return out.join('\n\n');
+}
+
+// ─── DESIGN TOKENS ───────────────────────────────────────────
+const C = {
+  primary:'#4B39EF', bg:'#F1F4F8', white:'#FFFFFF',
+  headerBg:'#14181B', teal:'#00BCD4',
+  border:'#E0E3E7', txt:'#14181B', txt2:'#57636C',
+  done:'#249689', na:'#57636C', danger:'#FF5963', amber:'#F4A423',
+  // Offline banner: slate blue — does NOT clash with grade colors
+  offlineBg:'#1A237E', offlineTxt:'#E8EAF6',
+};
+const inp = { width:'100%', background:C.white, border:`1.5px solid ${C.border}`, borderRadius:8, padding:'10px 12px', color:C.txt, fontSize:14, outline:'none', boxSizing:'border-box', fontFamily:'inherit' };
+const lbl = { fontSize:11, color:C.txt2, marginBottom:4, display:'block', fontWeight:700, textTransform:'uppercase', letterSpacing:'.04em' };
+
+// ─── UI PRIMITIVES ───────────────────────────────────────────
+const Card = ({ children, style={}, onClick }) => (
+  <div onClick={onClick} style={{ background:C.white, borderRadius:12, padding:16, boxShadow:'0 1px 4px rgba(0,0,0,.07)', marginBottom:10, cursor: onClick ? 'pointer' : undefined, ...style }}>{children}</div>
+);
+const SecTitle = ({ children, color=C.teal }) => (
+  <div style={{ fontSize:11, fontWeight:700, color, textTransform:'uppercase', letterSpacing:'.08em', marginBottom:12 }}>{children}</div>
+);
+const FRow = ({ label:lb, children, required }) => (
+  <div style={{ marginBottom:13 }}>
+    <label style={lbl}>{lb}{required && <span style={{ color:C.danger }}> *</span>}</label>
+    {children}
+  </div>
+);
+const FRow2 = ({ children }) => (
+  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>{children}</div>
+);
+const BtnPrimary = ({ children, onClick, disabled, style={} }) => (
+  <button onClick={onClick} disabled={disabled} style={{ background:disabled?'#B0B7C3':C.primary, color:'#fff', border:'none', borderRadius:8, padding:'13px 20px', fontSize:14, fontWeight:700, cursor:disabled?'not-allowed':'pointer', width:'100%', display:'flex', alignItems:'center', justifyContent:'center', gap:8, ...style }}>{children}</button>
+);
+const BtnSecondary = ({ children, onClick, style={} }) => (
+  <button onClick={onClick} style={{ background:C.white, color:C.primary, border:`1.5px solid ${C.primary}`, borderRadius:8, padding:'11px 20px', fontSize:14, fontWeight:600, cursor:'pointer', width:'100%', display:'flex', alignItems:'center', justifyContent:'center', gap:8, marginTop:8, ...style }}>{children}</button>
+);
+const BtnTeal = ({ children, onClick, disabled, style={} }) => (
+  <button onClick={onClick} disabled={disabled} style={{ background:disabled?'#B0B7C3':C.teal, color:'#fff', border:'none', borderRadius:8, padding:'12px 20px', fontSize:14, fontWeight:700, cursor:disabled?'not-allowed':'pointer', width:'100%', display:'flex', alignItems:'center', justifyContent:'center', gap:8, ...style }}>{children}</button>
+);
+
+const GradeBadge = ({ gradeId }) => {
+  const g = GRADES.find(x => x.id === gradeId);
+  if (!g) return null;
+  return <span style={{ fontSize:10, fontWeight:700, padding:'2px 8px', borderRadius:10, background:g.bg, color:g.color, border:`1px solid ${g.color}` }}>{g.label}</span>;
+};
+
+// Photo thumbnail with save-status badge
+function PhotoThumb({ photoRef, onClick }) {
+  const [url, setUrl] = useState(null);
+  useEffect(() => {
+    let objectUrl = null;
+    dbGet('photos', photoRef.photoId).then(ph => {
+      if (ph?.blob) {
+        objectUrl = URL.createObjectURL(ph.blob);
+        setUrl(objectUrl);
+      }
+    });
+    return () => { if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [photoRef.photoId]);
+
+  const status = photoRef.saveStatus;
+  const badge = status === 'ok' && photoRef.savedToDevice ? '✅'
+    : status === 'ok' ? '💾'
+    : status === 'partial' ? '⚠️'
+    : '🔴';
+
+  return (
+    <div style={{ position:'relative', cursor:'pointer' }} onClick={onClick}>
+      {url
+        ? <img src={url} alt="" style={{ width:68, height:68, borderRadius:8, objectFit:'cover', border:`1.5px solid ${status==='fail'?C.danger:C.border}` }}/>
+        : <div style={{ width:68, height:68, borderRadius:8, background:C.bg, display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>🖼️</div>
+      }
+      <span style={{ position:'absolute', bottom:2, left:2, fontSize:12 }}>{badge}</span>
+      {photoRef.num && <span style={{ position:'absolute', top:2, right:2, background:'rgba(0,0,0,.65)', color:'#fff', fontSize:9, padding:'1px 4px', borderRadius:4 }}>P{photoRef.num}</span>}
+    </div>
+  );
+}
+
+// Defect text field. Uncontrolled + commit-on-blur so a keystroke never
+// triggers a save/re-render cycle mid-typing.
+function DefectField({ label, value, onCommit, placeholder, filled, rows = 0 }) {
+  const style = { ...inp, borderColor: filled ? C.border : C.amber,
+                  ...(rows ? { minHeight: rows * 20 + 20, resize: 'vertical' } : {}) };
+  return (
+    <FRow label={label}>
+      {rows
+        ? <textarea style={style} defaultValue={value || ''} onBlur={e => onCommit(e.target.value)} placeholder={placeholder} />
+        : <input style={style} defaultValue={value || ''} onBlur={e => onCommit(e.target.value)} placeholder={placeholder} />}
+    </FRow>
+  );
+}
+
+// Free-text field bound to generalInfo — written as it appears in the report.
+// Module scope so typing never remounts the input.
+function BCField({ label, value, onCommit, placeholder, rows = 2 }) {
+  return (
+    <FRow label={label}>
+      <textarea
+        style={{ ...inp, minHeight: rows * 22 + 20, resize: 'vertical', fontSize: 13, lineHeight: 1.5 }}
+        defaultValue={value || ''}
+        onBlur={e => onCommit(e.target.value)}
+        placeholder={placeholder} />
+    </FRow>
+  );
+}
+
+// ─── SHARED LAYOUT (module scope — stable component identity) ──
+// Defined outside App so React never sees a new component type on
+// re-render. Previously nested inside App, which remounted the whole
+// tree on every keystroke and dropped input focus.
+function Layout({ title, children, ui }) {
+  const { isOnline, storageWarning, swUpdate, page, setPage, setCur, cur, prog,
+          incompleteN, toast, gradeDialog, setGradeDialog, updItem, confirmSignificant,
+          fileRef, onFileInput } = ui;
+  return (
+    <div style={{ maxWidth:480, margin:'0 auto', minHeight:'100vh', background:C.bg, fontFamily:"'Segoe UI',system-ui,sans-serif", display:'flex', flexDirection:'column' }}>
+      <style>{`*{box-sizing:border-box} input,select,textarea{font-family:inherit} ::-webkit-scrollbar{width:4px} ::-webkit-scrollbar-thumb{background:#E0E3E7;border-radius:2px} @keyframes pulse{0%,100%{opacity:.3}50%{opacity:1}}`}</style>
+
+      {/* Offline banner — slate blue, NOT red/orange/yellow */}
+      {!isOnline && (
+        <div style={{ background:C.offlineBg, color:C.offlineTxt, fontSize:12, textAlign:'center', padding:'6px 16px', fontWeight:600 }}>
+          ⚠ Offline — entries are saved to this device
+        </div>
+      )}
+      {storageWarning && (
+        <div style={{ background:'#37474F', color:'#ECEFF1', fontSize:11, textAlign:'center', padding:'5px', fontWeight:600 }}>
+          ⚠ Storage &gt;80% full — consider exporting data
+        </div>
+      )}
+      {swUpdate && (
+        <div style={{ background:'#1565C0', color:'#fff', fontSize:11, textAlign:'center', padding:'5px', cursor:'pointer' }}
+          onClick={() => { navigator.serviceWorker.controller?.postMessage('skipWaiting'); window.location.reload(); }}>
+          🔄 Update available — tap to refresh
+        </div>
+      )}
+
+      {/* Header */}
+      <div style={{ background:C.headerBg, padding:'13px 16px', display:'flex', alignItems:'center', gap:10, position:'sticky', top:0, zIndex:100 }}>
+        <button onClick={() => {
+          if (['checklist','summary'].includes(page)) setPage('info');
+          else { setPage('home'); setCur(null); }
+        }} style={{ background:'none', border:'none', color:C.white, cursor:'pointer', fontSize:24, padding:'2px 4px', lineHeight:1 }}>‹</button>
+        <div style={{ flex:1 }}>
+          <div style={{ fontSize:15, fontWeight:700, color:C.white }}>{title}</div>
+          {(cur?.generalInfo?.address?.asPerTitle || cur?.insp?.address) && <div style={{ fontSize:11, color:C.teal, marginTop:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{cur.generalInfo?.address?.asPerTitle || cur.insp.address}</div>}
+        </div>
+        <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+          {incompleteN > 0 && <span style={{ fontSize:10, fontWeight:700, background:C.amber, color:'#fff', padding:'2px 6px', borderRadius:10 }}>⚠ {incompleteN}</span>}
+          {cur?.wt?.rating && <span style={{ fontSize:10, fontWeight:700, padding:'2px 8px', borderRadius:10, background:cur.wt.rating==='HIGH'?'#C62828':cur.wt.rating==='MEDIUM'?'#EF6C00':C.done, color:'#fff' }}>{cur.wt.rating}</span>}
+          <span style={{ fontFamily:'monospace', fontSize:11, color:C.teal, fontWeight:700 }}>{prog}%</span>
+        </div>
+      </div>
+      {/* Progress */}
+      <div style={{ height:4, background:'#2A2F35' }}>
+        <div style={{ height:'100%', width:`${prog}%`, background:C.teal, transition:'width .4s' }}/>
+      </div>
+
+      <div style={{ flex:1, overflowY:'auto', padding:'14px 14px 100px' }}>{children}</div>
+
+      {/* Bottom Nav */}
+      <div style={{ position:'fixed', bottom:0, left:'50%', transform:'translateX(-50%)', width:'100%', maxWidth:480, background:C.white, borderTop:`1px solid ${C.border}`, display:'flex', zIndex:100 }}>
+        {[['info','📋','Details'],['checklist','✅','Checklist'],['summary','📊','Summary']].map(([p,icon,lb]) => (
+          <button key={p} onClick={() => setPage(p)} style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:2, background:'none', border:'none', cursor:'pointer', padding:'10px 6px 12px', color:page===p?C.primary:C.txt2, borderTop:page===p?`2.5px solid ${C.primary}`:'2.5px solid transparent' }}>
+            <span style={{ fontSize:20 }}>{icon}</span>
+            <span style={{ fontSize:9, fontWeight:700, textTransform:'uppercase', letterSpacing:'.04em' }}>{lb}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Toast */}
+      {toast && <div style={{ position:'fixed', bottom:82, left:'50%', transform:'translateX(-50%)', background:toast.type==='error'?C.danger:C.done, color:'#fff', padding:'10px 22px', borderRadius:22, fontSize:13, fontWeight:600, zIndex:300, whiteSpace:'nowrap', boxShadow:'0 4px 16px rgba(0,0,0,.2)' }}>{toast.msg}</div>}
+
+      {/* Grade confirmation dialog */}
+      {gradeDialog && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.6)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}>
+          <div style={{ background:C.white, borderRadius:16, padding:24, maxWidth:360, width:'100%' }}>
+            <div style={{ fontSize:16, fontWeight:700, color:'#C62828', marginBottom:12 }}>🔴 Confirm Significant Defect</div>
+            <p style={{ fontSize:13, color:C.txt2, lineHeight:1.6, marginBottom:20 }}>
+              Is this defect <strong>not resolvable by maintenance</strong> (repainting, resealing, flashing replacement, cleaning)?<br/><br/>
+              If it can be fixed by maintenance, use Significant Maintenance instead.
+            </p>
+            <div style={{ display:'flex', gap:8 }}>
+              <button onClick={() => { updItem(gradeDialog.itemId, { grade:'maintenance' }); setGradeDialog(null); }} style={{ flex:1, padding:'11px', borderRadius:8, border:`1.5px solid #EF6C00`, background:'#FFF3E0', color:'#EF6C00', fontWeight:700, cursor:'pointer', fontSize:13 }}>
+                Use Maintenance
+              </button>
+              <button onClick={confirmSignificant} style={{ flex:1, padding:'11px', borderRadius:8, border:'none', background:'#C62828', color:'#fff', fontWeight:700, cursor:'pointer', fontSize:13 }}>
+                Confirm Significant
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <input ref={fileRef} type="file" accept="image/*" multiple onChange={onFileInput} style={{ display:'none' }}/>
+    </div>
+  );
+}
+
+// ─── MAIN APP ─────────────────────────────────────────────────
+function App() {
+  const [dbReady, setDbReady] = useState(false);
+  const [migrated, setMigrated] = useState(null);
+  const [list, setList] = useState([]);
+  const [cur, setCur] = useState(null);
+  const [page, setPage] = useState('splash');
+  const [catTab, setCatTab] = useState(0);
+  const [photoMod, setPhotoMod] = useState(null);  // { itemId, defectId, idx }
+  const [wordGenerating, setWordGenerating] = useState(false);
+  const [migrationBanner, setMigrationBanner] = useState(false);
+  const [toast, setToast] = useState(null);
+  const [gradeDialog, setGradeDialog] = useState(null); // { itemId, label }
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [storageWarning, setStorageWarning] = useState(false);
+  const [swUpdate, setSwUpdate] = useState(false);
+  const [validationErrors, setValidationErrors] = useState([]);
+  const fileRef = useRef();
+  const importRef = useRef();
+  const pendingPhotoItem = useRef(null);
+
+  // ── Init: open DB, migrate, load ────────────────────────────
+  useEffect(() => {
+    async function init() {
+      try {
+        await openDB();
+        const n = await migrateFromLocalStorage();
+        if (n) setMigrated(n);
+        // Run v1→v2 migration on all inspections
+        const rawInspections = await dbGetAll('inspections');
+        const inspections = [];
+        let anyMigrated = false;
+        for (const raw of rawInspections) {
+          let { ins, migrated } = migrateToV3(raw);
+          const iv4 = migrateItemsToV4(ins);
+          if (iv4.migrated || !ins._itemsV4) {
+            ins = { ...ins, items: iv4.items, _itemsV4: true };
+            migrated = migrated || iv4.migrated;
+          }
+          if (migrated) { await dbPut('inspections', ins); anyMigrated = true; }
+          inspections.push(ins);
+        }
+        if (anyMigrated) setMigrationBanner(true);
+        inspections.sort((a,b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+        setList(inspections);
+        setDbReady(true);
+        setTimeout(() => setPage('home'), 2000);
+        // Storage check
+        checkStorageQuota().then(q => { if (q && q.pct > 80) setStorageWarning(true); });
+        // SW update check
+        if (window.__swUpdateAvailable) setSwUpdate(true);
+        // Online/offline
+        window.addEventListener('online', () => setIsOnline(true));
+        window.addEventListener('offline', () => setIsOnline(false));
+      } catch (err) {
+        console.error('Init failed:', err);
+        setDbReady(true);
+        setTimeout(() => setPage('home'), 2000);
+      }
+    }
+    init();
+    return () => {
+      window.removeEventListener('online', () => setIsOnline(true));
+      window.removeEventListener('offline', () => setIsOnline(false));
+    };
+  }, []);
+
+  const showToast = (msg, type='ok') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  // ── Persist inspection (no photos — photos stored separately) ──
+  async function saveInspection(ins) {
+    const u = { ...ins, updatedAt: new Date().toISOString() };
+    try {
+      await dbPutVerified('inspections', u);
+      setList(p => {
+        const i = p.findIndex(x => x.id === u.id);
+        const n = [...p];
+        i >= 0 ? n[i] = u : n.unshift(u);
+        return n;
+      });
+      setCur(u);
+      return u;
+    } catch (err) {
+      showToast('⚠️ Save failed — retry', 'error');
+      throw err;
+    }
+  }
+
+  function updItem(itemId, patch) {
+    return saveInspection({ ...cur, items: { ...cur.items, [itemId]: { ...cur.items[itemId], ...patch } } });
+  }
+  function updF(sec, k, v) { return saveInspection({ ...cur, [sec]: { ...cur[sec], [k]: v } }); }
+  function updWT(k, v) {
+    const wt = { ...cur.wt, factors: { ...cur.wt.factors, [k]: v } };
+    wt.rating = calcWTRisk(wt.factors);
+    return saveInspection({ ...cur, wt });
+  }
+
+  function newInsp() { const i = blankInspection(); saveInspection(i); setPage('info'); setCatTab(0); }
+  function openInsp(ins) { setCur(ins); setPage('info'); setCatTab(0); }
+  async function delInsp(id) {
+    if (!confirm('Delete this inspection and all its photos?')) return;
+    // Delete photos from IndexedDB
+    const photos = await dbGetByIndex('photos', 'byInspection', id);
+    for (const ph of photos) await dbDelete('photos', ph.photoId);
+    await dbDelete('inspections', id);
+    setList(p => p.filter(x => x.id !== id));
+    setCur(null); setPage('home');
+  }
+
+  // ── Photo handling ───────────────────────────────────────────
+  // Photos attach to a specific defect, so an item with several defects keeps
+  // each set of evidence with the defect it belongs to.
+  async function handleFiles(files, target) {
+    if (!files?.length || !target?.itemId || !target?.defectId) return;
+    const { itemId, defectId } = target;
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      try {
+        const blob = await compressImage(file);
+
+        // Always read the freshest record — several files may be processed in a row
+        const ins = (await dbGet('inspections', cur.id)) || cur;
+        const item = ins.items[itemId];
+        const df = (item?.defects || []).find(x => x.id === defectId);
+        if (!df) { showToast('Defect no longer exists', 'error'); return; }
+
+        const existing = df.photos || [];
+        const photoId = gid();
+        const seq = existing.length + 1;
+        const globalNum = Object.values(ins.items)
+          .flatMap(it => (it.defects || []).flatMap(x => x.photos || [])).length + 1;
+        const defectRef = df.defectRef || itemId;
+        // Lettered suffix continues from what the defect already has: D-01a, D-01b…
+        const photoLabel = `${defectRef}${String.fromCharCode(97 + existing.length)}`;
+        const filename = photoFilename(ins.fileNo, photoLabel, seq);
+
+        const photoRecord = {
+          photoId, inspectionId: ins.id, defectRef, defectId, seq,
+          photoLabel, blob, caption: '', savedToDevice: false,
+          saveStatus: 'pending', createdAt: new Date().toISOString(),
+        };
+
+        let saveStatus = 'ok';
+        try {
+          await dbPutVerified('photos', { ...photoRecord, saveStatus: 'ok' });
+        } catch {
+          saveStatus = 'fail';
+          showToast('🔴 Photo save to app failed — retry', 'error');
+        }
+
+        let savedToDevice = false;
+        if (ins.saveDevicePhotos) {
+          savedToDevice = saveToDevice(blob, filename);
+          if (!savedToDevice && saveStatus !== 'fail') saveStatus = 'partial';
+        }
+        await dbPut('photos', { ...photoRecord, saveStatus, savedToDevice });
+
+        const photoRef = { photoId, num: globalNum, photoLabel, caption: '', saveStatus, savedToDevice };
+        const defects = item.defects.map(x =>
+          x.id === defectId ? { ...x, photos: [...(x.photos || []), photoRef] } : x);
+        await saveInspection({ ...ins, items: { ...ins.items, [itemId]: { ...item, defects } } });
+
+        showToast(savedToDevice ? '✅ Photo saved + downloaded'
+          : saveStatus === 'ok' ? '💾 Photo saved to app' : '⚠️ Partial save — check',
+          saveStatus === 'fail' ? 'error' : 'ok');
+
+      } catch (err) {
+        console.error('Photo handling error:', err);
+        showToast('🔴 Photo error — please retry', 'error');
+      }
+    }
+    if (fileRef.current) fileRef.current.value = '';
+  }
+
+  function onFileInput(e) {
+    const t = pendingPhotoItem.current;
+    if (t?.catId) handleCatFiles(e.target.files, t.catId);
+    else handleFiles(e.target.files, t);
+  }
+
+  async function deletePhoto(itemId, defectId, photoIdx) {
+    const item = cur.items[itemId];
+    const df = (item?.defects || []).find(x => x.id === defectId);
+    const photoRef = df?.photos?.[photoIdx];
+    if (photoRef?.photoId) await dbDelete('photos', photoRef.photoId).catch(() => {});
+    const defects = item.defects.map(x =>
+      x.id === defectId ? { ...x, photos: x.photos.filter((_, n) => n !== photoIdx) } : x);
+    await updItem(itemId, { defects });
+    setPhotoMod(null);
+    showToast('Photo deleted');
+  }
+
+  // ── Category overview photos ─────────────────────────────────
+  // Evidence that a category was inspected, independent of any defect.
+  // Labelled SITE-01, SUB-01… so Downloads filenames stay self-describing.
+  const CAT_CODE = { site:'SITE', sub:'SUB', ext:'EXT', roof:'ROOF', roofspace:'RSPACE',
+                     int:'INT', kitchen:'KIT', bath:'BATH', laundry:'LAU', garage:'GAR',
+                     general:'GEN', moisture:'MOIST', thermal:'THERM' };
+
+  async function handleCatFiles(files, catId) {
+    if (!files?.length || !catId) return;
+    const code = CAT_CODE[catId] || catId.toUpperCase();
+
+    for (let i = 0; i < files.length; i++) {
+      try {
+        const blob = await compressImage(files[i]);
+        const ins = (await dbGet('inspections', cur.id)) || cur;
+        const existing = ins.catPhotos?.[catId]?.photos || [];
+
+        const photoId = gid();
+        const seq = existing.length + 1;
+        const photoLabel = `${code}-${String(seq).padStart(2, '0')}`;
+        const filename = photoFilename(ins.fileNo, photoLabel, seq);
+
+        const rec = { photoId, inspectionId: ins.id, defectRef: photoLabel, catId, seq,
+                      photoLabel, blob, caption: '', savedToDevice: false,
+                      saveStatus: 'pending', createdAt: new Date().toISOString() };
+
+        let saveStatus = 'ok';
+        try { await dbPutVerified('photos', { ...rec, saveStatus: 'ok' }); }
+        catch { saveStatus = 'fail'; showToast('🔴 Photo save to app failed — retry', 'error'); }
+
+        let savedToDevice = false;
+        if (ins.saveDevicePhotos) {
+          savedToDevice = saveToDevice(blob, filename);
+          if (!savedToDevice && saveStatus !== 'fail') saveStatus = 'partial';
+        }
+        await dbPut('photos', { ...rec, saveStatus, savedToDevice });
+
+        const ref = { photoId, photoLabel, caption: '', saveStatus, savedToDevice };
+        await saveInspection({ ...ins, catPhotos: { ...(ins.catPhotos || {}),
+          [catId]: { photos: [...existing, ref] } } });
+
+        showToast(savedToDevice ? `✅ ${photoLabel} saved + downloaded`
+          : saveStatus === 'ok' ? `💾 ${photoLabel} saved to app` : '⚠️ Partial save — check',
+          saveStatus === 'fail' ? 'error' : 'ok');
+      } catch (err) {
+        console.error('Category photo error:', err);
+        showToast('🔴 Photo error — please retry', 'error');
+      }
+    }
+    if (fileRef.current) fileRef.current.value = '';
+  }
+
+  function updCatPhoto(catId, idx, patch) {
+    const photos = (cur.catPhotos?.[catId]?.photos || [])
+      .map((p, n) => n === idx ? { ...p, ...patch } : p);
+    return saveInspection({ ...cur, catPhotos: { ...(cur.catPhotos || {}), [catId]: { photos } } });
+  }
+
+  async function deleteCatPhoto(catId, idx) {
+    const photos = [...(cur.catPhotos?.[catId]?.photos || [])];
+    const ref = photos[idx];
+    if (ref?.photoId) await dbDelete('photos', ref.photoId).catch(() => {});
+    photos.splice(idx, 1);
+    await saveInspection({ ...cur, catPhotos: { ...(cur.catPhotos || {}), [catId]: { photos } } });
+    setPhotoMod(null);
+    showToast('Photo deleted');
+  }
+
+  // ── Defect CRUD ──────────────────────────────────────────────
+  function nextDefectRef(inspection) {
+    let max = 0;
+    Object.values(inspection.items || {}).forEach(it =>
+      (it.defects || []).forEach(df => {
+        const n = parseInt((df.defectRef || '').replace('D-', ''), 10);
+        if (!isNaN(n) && n > max) max = n;
+      }));
+    return `D-${String(max + 1).padStart(2, '0')}`;
+  }
+
+  // Add a defect to an item. Items may hold several — e.g. cladding cracking,
+  // failed sealant and inadequate clearance are three separate defects.
+  async function addDefect(itemId) {
+    const it = cur.items[itemId] || blankItem();
+    const df = { ...blankDefect(), defectRef: nextDefectRef(cur) };
+    await updItem(itemId, { status: ST.done, defects: [...(it.defects || []), df] });
+    showToast(`${df.defectRef} added`);
+    return df.id;
+  }
+
+  function updDefect(itemId, defectId, patch) {
+    const it = cur.items[itemId];
+    const defects = (it.defects || []).map(df => df.id === defectId ? { ...df, ...patch } : df);
+    return updItem(itemId, { defects });
+  }
+
+  async function removeDefect(itemId, defectId) {
+    const it = cur.items[itemId];
+    const df = (it.defects || []).find(x => x.id === defectId);
+    if (!df) return;
+    if (!confirm(`Delete ${df.defectRef || 'this defect'} and its photos? This cannot be undone.`)) return;
+    for (const ph of (df.photos || [])) {
+      if (ph.photoId) await dbDelete('photos', ph.photoId).catch(() => {});
+    }
+    const defects = (it.defects || []).filter(x => x.id !== defectId);
+    await updItem(itemId, { defects, status: defects.length ? ST.done : ST.pending });
+    showToast(`${df.defectRef || 'Defect'} deleted`);
+  }
+
+  async function handleGradeSelect(itemId, defectId, gradeId) {
+    if (gradeId === 'significant') {
+      setGradeDialog({ itemId, defectId, grade: gradeId });
+    } else {
+      await updDefect(itemId, defectId, { grade: gradeId });
+    }
+  }
+
+  async function confirmSignificant() {
+    if (!gradeDialog) return;
+    await updDefect(gradeDialog.itemId, gradeDialog.defectId, { grade: 'significant' });
+    setGradeDialog(null);
+  }
+
+  // ── Export / Import JSON ────────────────────────────────────
+  function exportJSON() {
+    if (!cur) return;
+    const exportData = {
+      wwwExportVersion: "1.0",
+      exportedAt: new Date().toISOString(),
+      exportedFrom: /Mobi|Android/i.test(navigator.userAgent) ? 'mobile' : 'desktop',
+      inspection: {
+        ...cur,
+        items: Object.fromEntries(
+          Object.entries(cur.items).map(([id, item]) => [id, {
+            ...item,
+            // Keep photo refs (label, num, caption) but mark as needing re-attachment
+            photos: (item.photos||[]).map(p => ({
+              photoId: p.photoId, num: p.num, photoLabel: p.photoLabel,
+              caption: p.caption||'', _needsReattach: true, saveStatus: 'missing'
+            }))
+          }])
+        )
+      }
+    };
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${cur.fileNo}_${new Date().toISOString().slice(0,10)}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    showToast('✅ JSON exported — re-attach photos on other device');
+  }
+
+  async function importJSON(file) {
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      if (!data.wwwExportVersion || !data.inspection) {
+        showToast('Invalid export file', 'error'); return;
+      }
+      const imported = { ...data.inspection, _importedAt: new Date().toISOString(), _importedFrom: data.exportedFrom };
+      await dbPut('inspections', imported);
+      setList(prev => {
+        const i = prev.findIndex(x => x.id === imported.id);
+        const n = [...prev];
+        i >= 0 ? n[i] = imported : n.unshift(imported);
+        return n;
+      });
+      const photoCount = Object.values(imported.items||{}).reduce((acc,d) => acc + (d.photos?.length||0), 0);
+      showToast(`✅ Imported: ${imported.insp?.address||'No address'}${photoCount>0?` — ${photoCount} photo(s) need re-attaching`:''}`);
+    } catch(err) { showToast('Import failed: '+err.message, 'error'); }
+  }
+
+  // ── Generate Word Document ──────────────────────────────────
+  async function generateWord() {
+    const docxLib = window.docx;
+    if (!docxLib) { showToast('Word library loading — please refresh', 'error'); return; }
+    setWordGenerating(true);
+    showToast('⏳ Generating Word document…');
+    try {
+      const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
+              AlignmentType, BorderStyle, WidthType, ShadingType, PageBreak } = docxLib;
+
+      // ── Color palette ──
+      const TEAL="0A7C6B", LTEAL="E8F5F3", BTEAL="00BCD4";
+      const RED="C62828", LRED="FFEBEE";
+      const ORANGE="EF6C00", LORANGE="FFF3E0";
+      const YELLOW="F9A825", LYELLOW="FFFDE7";
+      const GRAY="57636C", LGRAY="F1F4F8";
+      const BLACK="14181B";
+
+      const gradeColors = {
+        significant: { color: RED, bg: LRED, label: "Significant Defect" },
+        maintenance: { color: ORANGE, bg: LORANGE, label: "Significant Maintenance Required" },
+        deterioration: { color: YELLOW, bg: LYELLOW, label: "Gradual Deterioration" },
+      };
+
+      // ── Border helpers ──
+      const bLine = (color="CCCCCC", size=4) => ({ style: BorderStyle.SINGLE, size, color });
+      const allB = (c="CCCCCC") => ({ top:bLine(c), bottom:bLine(c), left:bLine(c), right:bLine(c) });
+      const noB = () => { const n={style:BorderStyle.NONE,size:0,color:"FFFFFF"}; return {top:n,bottom:n,left:n,right:n}; };
+
+      // ── Typography ──
+      const r = (text, opts={}) => new TextRun({ text: String(text||''), font:"Arial", size:20, color:BLACK, ...opts });
+      const rb = (text, opts={}) => r(text, { bold:true, ...opts });
+      const h1P = (text) => new Paragraph({
+        spacing:{before:320,after:160},
+        border:{bottom:{style:BorderStyle.SINGLE,size:6,color:TEAL,space:4}},
+        children:[r(text,{bold:true,size:28,color:TEAL})]
+      });
+      const h2P = (text, color=TEAL) => new Paragraph({
+        spacing:{before:220,after:100},
+        children:[r(text,{bold:true,size:24,color})]
+      });
+      const p = (text, opts={}) => new Paragraph({ spacing:{before:60,after:80}, children:[r(text,opts)] });
+      const gap = (n=120) => new Paragraph({ spacing:{before:n}, children:[r('')] });
+      const pb = () => new Paragraph({ children:[new PageBreak()] });
+
+      // ── Info table (2-col label|value) ──
+      const infoTbl = (rows) => new Table({
+        width:{size:9026,type:WidthType.DXA}, columnWidths:[2800,6226],
+        rows: rows.map(([lbl,val],i) => new TableRow({ children:[
+          new TableCell({ width:{size:2800,type:WidthType.DXA}, borders:allB(), margins:{top:80,bottom:80,left:120,right:120},
+            shading:{fill:i%2===0?LTEAL:"FFFFFF",type:ShadingType.CLEAR},
+            children:[new Paragraph({children:[r(lbl,{bold:true,size:18,color:TEAL})]})] }),
+          new TableCell({ width:{size:6226,type:WidthType.DXA}, borders:allB(), margins:{top:80,bottom:80,left:120,right:120},
+            shading:{fill:i%2===0?"FFFFFF":LGRAY,type:ShadingType.CLEAR},
+            children:[new Paragraph({children:[r(String(val||'—'),{size:18})]})] }),
+        ]}))
+      });
+
+      // ── Defect block (4-field, coloured left border) ──
+      const defectBlock = (d) => {
+        const gc = d.gc || {};
+        const axes = (d.axes||[]).map(ax=>AXES.find(a=>a.id===ax)?.label).filter(Boolean).join(' · ');
+        return new Table({
+          width:{size:9026,type:WidthType.DXA}, columnWidths:[2200,6826],
+          rows:[new TableRow({ children:[
+            new TableCell({
+              width:{size:2200,type:WidthType.DXA},
+              borders:{...noB(),left:{style:BorderStyle.SINGLE,size:18,color:gc.color||"999999"}},
+              shading:{fill:gc.bg||LGRAY,type:ShadingType.CLEAR},
+              margins:{top:120,bottom:120,left:160,right:100},
+              children:[
+                new Paragraph({children:[r(d.defectRef||'—',{bold:true,size:24,color:gc.color||"999999",font:"Courier New"})]}),
+                new Paragraph({spacing:{before:60},children:[r(d.catShort||'—',{bold:true,size:18,color:BLACK})]}),
+                new Paragraph({children:[r(d.item||'—',{size:17,color:GRAY})]}),
+                d.material ? new Paragraph({spacing:{before:40},children:[r(`Material: ${d.material}`,{size:16,color:GRAY})]}) : new Paragraph({children:[r('')]}),
+                axes ? new Paragraph({spacing:{before:40},children:[r(axes,{size:15,color:GRAY,italics:true})]}) : new Paragraph({children:[r('')]}),
+                d.photoLabels ? new Paragraph({spacing:{before:40},children:[r(`Photos: ${d.photoLabels}`,{size:15,color:"0097A7"})]}) : new Paragraph({children:[r('')]}),
+              ]
+            }),
+            new TableCell({
+              width:{size:6826,type:WidthType.DXA}, borders:noB(),
+              margins:{top:120,bottom:120,left:140,right:100},
+              children:[
+                new Paragraph({children:[r("LOCATION",{bold:true,size:16,color:GRAY})]}),
+                new Paragraph({spacing:{before:30,after:100},children:[r(d.location||'—',{size:19})]}),
+                new Paragraph({children:[r("DESCRIPTION",{bold:true,size:16,color:GRAY})]}),
+                new Paragraph({spacing:{before:30,after:100},children:[r(d.description||'—',{size:19})]}),
+                new Paragraph({children:[r("IMPLICATION",{bold:true,size:16,color:GRAY})]}),
+                new Paragraph({spacing:{before:30,after:100},children:[r(d.implication||'—',{size:19})]}),
+                new Paragraph({children:[r("RECOMMENDATION",{bold:true,size:16,color:GRAY})]}),
+                new Paragraph({spacing:{before:30},children:[r(d.recommendation||'—',{size:19})]}),
+              ]
+            })
+          ]})]
+        });
+      };
+
+      // ── Build flagged list ──
+      const flagged = allDefects(cur).map(d => ({
+        ...d,
+        gc: gradeColors[d.grade] || {},
+        photoLabels: (d.photos||[]).map(ph=>ph.photoLabel||'?').join(', '),
+      }));
+      const sigDef = flagged.filter(d=>d.grade==='significant');
+      const maintDef = flagged.filter(d=>d.grade==='maintenance');
+      const detDef = flagged.filter(d=>d.grade==='deterioration');
+
+      // ── Moisture helpers ──
+      const allReadings = cur.moisture.readings||[];
+      const ctrlVal = parseFloat(cur.moisture.controlReading)||0;
+      const mCls = (v) => {
+        const val=parseFloat(v);
+        if(isNaN(val)) return {l:'—',c:GRAY,include:false};
+        if(val<15) return {l:'Normal',c:"249689",include:false};
+        if(val<20) return {l:'Elevated',c:ORANGE,include:true};
+        if(val<25) return {l:'High',c:RED,include:true};
+        return {l:'Very High',c:"9B0000",include:true};
+      };
+
+      // ─────────────────────────────────────────────────────────
+      // DOCUMENT SECTIONS
+      // ─────────────────────────────────────────────────────────
+      const ch = []; // children array
+
+      // ══ COVER ════════════════════════════════════════════════
+      ch.push(
+        new Paragraph({ alignment:AlignmentType.CENTER, spacing:{before:1000,after:200},
+          children:[r("WWW",{bold:true,size:96,color:BTEAL})] }),
+        new Paragraph({ alignment:AlignmentType.CENTER, spacing:{before:0,after:80},
+          border:{bottom:{style:BorderStyle.SINGLE,size:8,color:BTEAL,space:6}},
+          children:[r("Property Inspection Ltd.",{size:32,color:TEAL})] }),
+        gap(300),
+        new Paragraph({ alignment:AlignmentType.CENTER, spacing:{before:0,after:60},
+          children:[r("Residential Property Inspection Report",{bold:true,size:40,color:BLACK})] }),
+        gap(200),
+        infoTbl([
+          ["Property Address", (cur.generalInfo?.address?.asPerTitle || cur.insp.address)||"—"],
+          ["Client", cur.client.name||"—"],
+          ["Date of Inspection", `${fmtDate(cur.insp.date)} at ${cur.insp.time||"—"}`],
+          ["File Number", cur.fileNo||"—"],
+          ["Scope", cur.insp.scope||"—"],
+          ["Inspector", cur.insp.inspector||"—"],
+          ["Qualifications", cur.insp.qualifications||"—"],
+        ]),
+        gap(300), pb()
+      );
+
+      // ══ GENERAL INFORMATION ═══════════════════════════════════
+      ch.push(h1P("General Information"), gap(60));
+      ch.push(h2P("Property & Inspection Details"));
+      ch.push(infoTbl([
+        ["Property Address", (cur.generalInfo?.address?.asPerTitle || cur.insp.address)||"—"],
+        ["Date of Inspection", fmtDate(cur.insp.date)],
+        ["Time of Inspection", cur.insp.time||"—"],
+        ["Scope of Inspection", cur.insp.scope||"—"],
+        ["Weather Conditions", cur.insp.weather||"—"],
+        ["Ground Conditions", cur.insp.soil||"—"],
+        ["Occupancy Status", cur.insp.occupancy||"—"],
+        ["People Present", cur.insp.people||"—"],
+        ["Areas Not Inspected", cur.insp.areasNotInspected||"—"],
+      ]));
+      ch.push(gap());
+      ch.push(h2P("Client Information"));
+      ch.push(infoTbl([
+        ["Client Name", cur.client.name||"—"],
+        ["Phone", cur.client.phone||"—"],
+        ["Email", cur.client.email||"—"],
+        ["Report Delivery", cur.client.delivery||"—"],
+        ["Payment Status", cur.client.payment||"—"],
+      ]));
+      ch.push(gap());
+      // Building characteristics — report document order (see 3rd audit template)
+      const bc = cur.generalInfo?.bc || {};
+      const svc = cur.generalInfo?.services || {};
+      ch.push(h2P("Building Characteristics"));
+      ch.push(infoTbl([
+        ["Age of Building", bc.age],
+        ["Building Type", bc.buildingType],
+        ["Levels", bc.levels],
+        ["Orientation of Building", bc.orientation],
+        ["Site Exposure", bc.siteExposure],
+        ["Contour and Vegetation", bc.contourVegetation],
+        ["Wall Cladding Type", bc.wallCladding],
+        ["Construction Type", bc.constructionType],
+        ["Roof Cladding", bc.roofCladding],
+        ["Roof Design", bc.roofDesign],
+        ["Foundation Type", bc.foundationType],
+        ["Property Furnished", bc.furnished],
+        ["Recent redecoration or repairs", bc.alterations],
+        ["Recently added flashings", bc.addedFlashings],
+        ["Note", bc.note],
+      ].filter(([, v]) => v && String(v).trim())));
+
+      if (svc.water || svc.sewage || svc.gas) {
+        ch.push(gap());
+        ch.push(h2P("Services"));
+        ch.push(infoTbl([
+          ["Water Source", svc.water],
+          ["Sewage Disposal", svc.sewage],
+          ["Gas Meter", svc.gas],
+        ].filter(([, v]) => v && String(v).trim())));
+      }
+      ch.push(pb());
+
+      // ══ SEVERITY & COLOUR KEY ═════════════════════════════════
+      ch.push(h1P("Severity & Colour Key"), gap(60));
+      const keyDefs = [
+        ["🔴 Significant Defect", RED, LRED, "Substantial repair or urgent action required. Cannot be resolved by routine maintenance."],
+        ["🟠 Significant Maintenance Required", ORANGE, LORANGE, "Large or visible issue resolvable by maintenance. Risk to building fabric if ignored short-term."],
+        ["🟡 Gradual Deterioration", YELLOW, LYELLOW, "Natural wear has reached a point where maintenance or replacement is required."],
+      ];
+      ch.push(new Table({
+        width:{size:9026,type:WidthType.DXA}, columnWidths:[3008,3009,3009],
+        rows:[new TableRow({ children: keyDefs.map(([lbl,col,bg,desc]) => new TableCell({
+          borders:{...noB(),left:{style:BorderStyle.SINGLE,size:14,color:col}},
+          shading:{fill:bg,type:ShadingType.CLEAR},
+          margins:{top:120,bottom:120,left:140,right:100},
+          children:[
+            new Paragraph({spacing:{after:60},children:[r(lbl,{bold:true,size:19,color:col})]}),
+            new Paragraph({children:[r(desc,{size:16,color:"555555"})]}),
+          ]
+        })) })]
+      }));
+      ch.push(gap(80));
+      ch.push(p("Particular Attribute and Further Investigation Required are not defect grades — they appear as supplementary labels within individual defect entries where applicable, and do not carry a colour code.",{italics:true,size:17,color:GRAY}));
+      ch.push(gap());
+
+      // ══ WEATHERTIGHTNESS RISK ═════════════════════════════════
+      ch.push(h1P("Weathertightness Risk Rating"), gap(60));
+      const wtCol = cur.wt.rating==='HIGH'?RED:cur.wt.rating==='MEDIUM'?ORANGE:"249689";
+      const wtBg = cur.wt.rating==='HIGH'?LRED:cur.wt.rating==='MEDIUM'?LORANGE:"E8F5E9";
+      ch.push(new Table({
+        width:{size:9026,type:WidthType.DXA}, columnWidths:[9026],
+        rows:[new TableRow({ children:[new TableCell({
+          borders:{...noB(),left:{style:BorderStyle.SINGLE,size:18,color:wtCol}},
+          shading:{fill:wtBg,type:ShadingType.CLEAR},
+          margins:{top:180,bottom:180,left:220,right:180},
+          children:[
+            new Paragraph({children:[r(`${cur.wt.rating||'NOT ASSESSED'} WEATHERTIGHTNESS RISK PROFILE`,{bold:true,size:30,color:wtCol})]}),
+            cur.wt.context ? new Paragraph({spacing:{before:140},children:[r(cur.wt.context,{size:19})]}) : new Paragraph({children:[r('')]}),
+            new Paragraph({spacing:{before:100},children:[r(`Invasive testing: ${cur.wt.invasive||'—'}`,{size:17,color:GRAY})]}),
+          ]
+        })] })]
+      }));
+      const filledWTF = WT_FACTORS.filter(f=>cur.wt.factors[f.id]);
+      if(filledWTF.length) {
+        ch.push(gap(80));
+        ch.push(h2P("Risk Factors Assessed"));
+        ch.push(infoTbl(filledWTF.map(f=>{
+          const val=cur.wt.factors[f.id];
+          const hi=f.highRisk.includes(val);
+          return [f.label, val+(hi?' ⚠':'')];
+        })));
+      }
+      ch.push(pb());
+
+      // ══ EXECUTIVE SUMMARY ═════════════════════════════════════
+      if(cur.execSummary) {
+        ch.push(h1P("Executive Summary"), gap(60));
+        ch.push(new Table({
+          width:{size:9026,type:WidthType.DXA}, columnWidths:[9026],
+          rows:[new TableRow({ children:[new TableCell({
+            borders:{...noB(),left:{style:BorderStyle.SINGLE,size:12,color:"00BCD4"}},
+            shading:{fill:"F8FFFE",type:ShadingType.CLEAR},
+            margins:{top:160,bottom:160,left:200,right:180},
+            children: cur.execSummary.split('\n').filter(l=>l.trim()).map(line=>
+              new Paragraph({spacing:{before:60,after:60},children:[r(line,{size:20})]})
+            )
+          })] })]
+        }));
+        ch.push(pb());
+      }
+
+      // ══ DEFECT SUMMARY TABLE ══════════════════════════════════
+      if(flagged.length) {
+        ch.push(h1P("Defect Summary Table"), gap(60));
+        ch.push(new Table({
+          width:{size:9026,type:WidthType.DXA},
+          columnWidths:[700,1800,1500,1900,2426,700],
+          rows:[
+            new TableRow({ children:["Ref","Grade","Section","Location","Description (summary)","Photos"].map(h=>
+              new TableCell({
+                shading:{fill:BLACK,type:ShadingType.CLEAR}, borders:allB("000000"),
+                margins:{top:80,bottom:80,left:100,right:80},
+                children:[new Paragraph({children:[r(h,{bold:true,size:17,color:"FFFFFF"})]})]
+              })
+            )}),
+            ...flagged.map((d,i)=>new TableRow({ children:[
+              new TableCell({ shading:{fill:i%2===0?"FFFFFF":LGRAY,type:ShadingType.CLEAR}, borders:allB(), margins:{top:60,bottom:60,left:100,right:60},
+                children:[new Paragraph({children:[r(d.defectRef||'—',{bold:true,size:16,color:d.gc?.color||GRAY,font:"Courier New"})]})] }),
+              new TableCell({ shading:{fill:i%2===0?"FFFFFF":LGRAY,type:ShadingType.CLEAR}, borders:allB(), margins:{top:60,bottom:60,left:100,right:60},
+                children:[new Paragraph({children:[r(d.gc?.label||'—',{size:15,color:d.gc?.color||GRAY,bold:true})]})] }),
+              new TableCell({ shading:{fill:i%2===0?"FFFFFF":LGRAY,type:ShadingType.CLEAR}, borders:allB(), margins:{top:60,bottom:60,left:100,right:60},
+                children:[new Paragraph({children:[r(d.catShort||'—',{size:15,color:GRAY})]})] }),
+              new TableCell({ shading:{fill:i%2===0?"FFFFFF":LGRAY,type:ShadingType.CLEAR}, borders:allB(), margins:{top:60,bottom:60,left:100,right:60},
+                children:[new Paragraph({children:[r(d.location||'—',{size:15})]})] }),
+              new TableCell({ shading:{fill:i%2===0?"FFFFFF":LGRAY,type:ShadingType.CLEAR}, borders:allB(), margins:{top:60,bottom:60,left:100,right:60},
+                children:[new Paragraph({children:[r(((d.description||'—').slice(0,80))+((d.description||'').length>80?'…':''),{size:15})]})] }),
+              new TableCell({ shading:{fill:i%2===0?"FFFFFF":LGRAY,type:ShadingType.CLEAR}, borders:allB(), margins:{top:60,bottom:60,left:100,right:60},
+                children:[new Paragraph({children:[r(d.photoLabels||'—',{size:14,color:"0097A7"})]})] }),
+            ]}))
+          ]
+        }));
+        ch.push(pb());
+      }
+
+      // ══ SIGNIFICANT DEFECTS ═══════════════════════════════════
+      if(sigDef.length) {
+        ch.push(h1P("Significant Defects"), gap(60));
+        sigDef.forEach((d,i)=>{ if(i>0) ch.push(gap(100)); ch.push(defectBlock(d)); });
+        ch.push(pb());
+      }
+
+      // ══ SIGNIFICANT MAINTENANCE ════════════════════════════════
+      if(maintDef.length) {
+        ch.push(h1P("Significant Maintenance Required"), gap(60));
+        maintDef.forEach((d,i)=>{ if(i>0) ch.push(gap(100)); ch.push(defectBlock(d)); });
+        if(detDef.length) ch.push(pb());
+        else ch.push(gap());
+      }
+
+      // ══ GRADUAL DETERIORATION ═════════════════════════════════
+      if(detDef.length) {
+        ch.push(h1P("Gradual Deterioration"), gap(60));
+        detDef.forEach((d,i)=>{ if(i>0) ch.push(gap(100)); ch.push(defectBlock(d)); });
+        ch.push(pb());
+      }
+
+      // ══ MOISTURE TEST ═════════════════════════════════════════
+      if(allReadings.length) {
+        ch.push(h1P("Moisture Test Results"), gap(60));
+        ch.push(infoTbl([
+          ["Meter Make / Model", cur.moisture.meterMake||"—"],
+          ["Measurement Mode", cur.moisture.meterType||"—"],
+          ["Control Reading", `${cur.moisture.controlReading||'—'}% WME at ${cur.moisture.controlLocation||'—'}`],
+        ]));
+        ch.push(gap(80));
+        ch.push(new Table({
+          width:{size:9026,type:WidthType.DXA},
+          columnWidths:[700,2000,1200,1100,900,3126],
+          rows:[
+            new TableRow({ children:["Ref","Location","Substrate","Reading","vs Control","Assessment / Comment"].map(h=>
+              new TableCell({
+                shading:{fill:"0097A7",type:ShadingType.CLEAR}, borders:allB("000000"),
+                margins:{top:70,bottom:70,left:100,right:80},
+                children:[new Paragraph({children:[r(h,{bold:true,size:16,color:"FFFFFF"})]})]
+              })
+            )}),
+            ...allReadings.map((rd,i)=>{
+              const mc=mCls(rd.value);
+              const val=parseFloat(rd.value);
+              const diff=!isNaN(val)?(val-ctrlVal):null;
+              const shade=i%2===0?"FFFFFF":LGRAY;
+              return new TableRow({ children:[
+                new TableCell({ shading:{fill:shade,type:ShadingType.CLEAR}, borders:allB(), margins:{top:60,bottom:60,left:100,right:60},
+                  children:[new Paragraph({children:[r(`M-${String(i+1).padStart(2,'0')}`,{bold:true,size:16,color:"0097A7",font:"Courier New"})]})] }),
+                new TableCell({ shading:{fill:shade,type:ShadingType.CLEAR}, borders:allB(), margins:{top:60,bottom:60,left:100,right:60},
+                  children:[new Paragraph({children:[r(rd.location||'—',{size:15})]})] }),
+                new TableCell({ shading:{fill:shade,type:ShadingType.CLEAR}, borders:allB(), margins:{top:60,bottom:60,left:100,right:60},
+                  children:[new Paragraph({children:[r(rd.substrate||'—',{size:15,color:GRAY})]})] }),
+                new TableCell({ shading:{fill:shade,type:ShadingType.CLEAR}, borders:allB(), margins:{top:60,bottom:60,left:100,right:60},
+                  children:[new Paragraph({children:[r(rd.value?`${rd.value}%`:'—',{bold:true,size:16})]})] }),
+                new TableCell({ shading:{fill:shade,type:ShadingType.CLEAR}, borders:allB(), margins:{top:60,bottom:60,left:100,right:60},
+                  children:[new Paragraph({children:[r(diff!==null?`${diff>0?'+':''}${diff.toFixed(1)}%`:'—',{size:15,color:mc.c})]})] }),
+                new TableCell({ shading:{fill:shade,type:ShadingType.CLEAR}, borders:allB(), margins:{top:60,bottom:60,left:100,right:60},
+                  children:[
+                    new Paragraph({children:[r(mc.l,{bold:true,size:16,color:mc.c})]}),
+                    rd.comment?new Paragraph({spacing:{before:30},children:[r(rd.comment,{size:15,color:GRAY})]}):new Paragraph({children:[r('')]}),
+                  ] }),
+              ]});
+            })
+          ]
+        }));
+        ch.push(gap(80));
+        ch.push(p("Readings are relative (non-invasive capacitance mode). %WME is a wood-moisture-equivalent scale and is not an absolute moisture content measurement on non-timber substrates. Control readings were taken on a comparable dry substrate in the same area.",{italics:true,size:17,color:GRAY}));
+        ch.push(gap());
+        ch.push(pb());
+      }
+
+      // ══ INSPECTOR NOTES ════════════════════════════════════════
+      if(cur.notes) {
+        ch.push(h1P("Inspector Notes"), gap(60));
+        cur.notes.split('\n').forEach(line=>ch.push(p(line)));
+        ch.push(gap());
+        ch.push(pb());
+      }
+
+      // ══ CERTIFICATE OF INSPECTION ═════════════════════════════
+      ch.push(h1P("Certificate of Inspection"), gap(60));
+      ch.push(p(`This report has been prepared by ${cur.insp.inspector||'—'} (${cur.insp.qualifications||'—'}) for the sole and exclusive use of ${cur.client.name||'the client'} only.`));
+      ch.push(gap(60));
+      ch.push(p("This inspection was visual and non-invasive only. Concealed building elements, including those within wall cavities, under floor coverings, and above ceiling linings, were not inspected and are excluded from this report."));
+      ch.push(gap(60));
+      ch.push(p(`Areas not inspected: ${cur.insp.areasNotInspected||'—'}`));
+      ch.push(gap(60));
+      ch.push(p("This report complies with NZS 4306:2005 Residential Property Inspection.",{bold:true}));
+      ch.push(gap(120));
+      ch.push(infoTbl([
+        ["File Number", cur.fileNo||'—'],
+        ["Date of Inspection", fmtDate(cur.insp.date)],
+        ["Inspector", cur.insp.inspector||'—'],
+        ["Qualifications", cur.insp.qualifications||'—'],
+      ]));
+
+      // ── Create & download document ──
+      const doc = new Document({
+        styles:{ default:{ document:{ run:{ font:"Arial", size:20, color:BLACK } } } },
+        sections:[{
+          properties:{ page:{ size:{width:11906,height:16838}, margin:{top:1134,right:1134,bottom:1134,left:1134} } },
+          children: ch
+        }]
+      });
+
+      const blob = await Packer.toBlob(doc);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${cur.fileNo}_${(cur.client.name||'report').replace(/\s+/g,'-').replace(/[^a-zA-Z0-9-]/g,'')}.docx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url), 2000);
+      showToast('📄 Word document saved to Downloads ✓');
+
+    } catch(err) {
+      console.error('Word generation error:', err);
+      showToast('Word error: '+err.message, 'error');
+    }
+    setWordGenerating(false);
+  }
+
+  // ── Counts ──────────────────────────────────────────────────
+  const prog = cur ? calcPct(cur) : 0;
+  const defectList = cur ? allDefects(cur) : [];
+  const flagN = defectList.length;
+  const sigN = defectList.filter(df => df.grade === 'significant').length;
+  const incompleteN = defectList.filter(df => !isDefectComplete(df)).length;
+  const doneN = cur ? CATS.filter(c => { const s = catSt(c.id,cur); return s===ST.done||s===ST.na; }).length : 0;
+
+  // ── Shared layout ────────────────────────────────────────────
+
+  // Prop bundle for the hoisted Layout component
+  const ui = { isOnline, storageWarning, swUpdate, page, setPage, setCur, cur, prog,
+               incompleteN, toast, gradeDialog, setGradeDialog, updItem, confirmSignificant,
+               fileRef, onFileInput };
+
+  // ═══ SPLASH ═══════════════════════════════════════════════════
+  if (page === 'splash') return (
+    <div style={{ maxWidth:480, margin:'0 auto', minHeight:'100vh', background:C.headerBg, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', fontFamily:"'Segoe UI',system-ui,sans-serif" }}>
+      <style>{`*{box-sizing:border-box} @keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}`}</style>
+      <div style={{ animation:'fadeUp .9s ease', textAlign:'center' }}>
+        <div style={{ fontSize:72, fontWeight:900, color:C.white, letterSpacing:'.04em', lineHeight:1 }}>WWW</div>
+        <div style={{ width:60, height:3, background:C.teal, margin:'16px auto' }}/>
+        <div style={{ fontSize:15, color:C.teal, letterSpacing:'.08em', marginBottom:6 }}>Property Inspection Ltd.</div>
+        <div style={{ fontSize:12, color:'#57636C' }}>NZS 4306:2005 · BOINZ ABS</div>
+        <div style={{ fontSize:11, color:'#3D4451', marginTop:6 }}>{APP_VER_DISPLAY}</div>
+        {!dbReady && <div style={{ fontSize:11, color:'#3D4451', marginTop:12 }}>Loading…</div>}
+      </div>
+    </div>
+  );
+
+  // ═══ HOME ═════════════════════════════════════════════════════
+  if (page === 'home') return (
+    <div style={{ maxWidth:480, margin:'0 auto', minHeight:'100vh', background:C.bg, fontFamily:"'Segoe UI',system-ui,sans-serif" }}>
+      <style>{`*{box-sizing:border-box} input,select,textarea{font-family:inherit}`}</style>
+      {!isOnline && <div style={{ background:C.offlineBg, color:C.offlineTxt, fontSize:12, textAlign:'center', padding:'6px', fontWeight:600 }}>⚠ Offline — saved data still available</div>}
+      {migrated && <div style={{ background:'#E8F5E9', color:'#2E7D32', fontSize:12, textAlign:'center', padding:'6px', fontWeight:600 }}>✅ Migrated {migrated} inspection{migrated>1?'s':''} from old storage</div>}
+
+      <div style={{ background:C.headerBg, padding:'28px 20px 32px', textAlign:'center' }}>
+        <div style={{ fontSize:42, fontWeight:900, color:C.white, letterSpacing:'.04em' }}>WWW</div>
+        <div style={{ fontSize:13, color:C.teal, letterSpacing:'.08em', marginTop:4 }}>Property Inspection</div>
+        <div style={{ fontSize:11, color:'#57636C', marginTop:4 }}>NZS 4306:2005 · {APP_VER_DISPLAY}</div>
+      </div>
+
+      <div style={{ padding:20 }}>
+        <BtnPrimary onClick={newInsp} style={{ padding:18, fontSize:16, borderRadius:12, marginBottom:10 }}>🏠  New Inspection</BtnPrimary>
+
+        {/* Import JSON */}
+        <button onClick={()=>importRef.current.click()} style={{ width:'100%', background:C.white, color:C.teal, border:`1.5px solid ${C.teal}`, borderRadius:10, padding:'11px 20px', fontSize:14, fontWeight:600, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:8, marginBottom:20 }}>
+          📥 Import Inspection (JSON)
+        </button>
+        <input ref={importRef} type="file" accept=".json,application/json" style={{display:'none'}} onChange={e=>{if(e.target.files[0])importJSON(e.target.files[0]);e.target.value='';}} />
+
+        {list.length > 0 && (
+          <>
+            <div style={{ fontFamily:'monospace', fontSize:11, color:C.txt2, textTransform:'uppercase', letterSpacing:'.1em', marginTop:20, marginBottom:10 }}>
+              Recent ({list.length})
+            </div>
+            {list.map(ins => {
+              const p = calcPct(ins);
+              const fn = Object.values(ins.items||{}).reduce((n,it)=>n+(it.defects?.length||0),0);
+              return (
+                <Card key={ins.id} onClick={() => openInsp(ins)} style={{ cursor:'pointer', padding:'14px 16px' }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6 }}>
+                    <div>
+                      <div style={{ fontWeight:700, fontSize:14, color:C.txt }}>{ins.insp?.address || 'No address'}</div>
+                      <div style={{ fontSize:12, color:C.txt2, marginTop:2 }}>{ins.client?.name || 'No client'} · {fmtDate(ins.insp?.date)}</div>
+                    </div>
+                    <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:4 }}>
+                      <span style={{ fontFamily:'monospace', fontSize:10, color:C.txt2, background:C.bg, padding:'2px 6px', borderRadius:4 }}>{ins.fileNo}</span>
+                      {fn > 0 && <span style={{ fontSize:10, color:C.danger, fontWeight:700 }}>⚑ {fn}</span>}
+                    </div>
+                  </div>
+                  <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                    <div style={{ flex:1, height:6, background:C.bg, borderRadius:3, overflow:'hidden' }}>
+                      <div style={{ height:'100%', width:`${p}%`, background:p===100?C.done:C.primary, borderRadius:3 }}/>
+                    </div>
+                    <span style={{ fontSize:11, color:C.txt2, fontWeight:600 }}>{p}%</span>
+                    <button onClick={e=>{e.stopPropagation();setCur(ins);setTimeout(()=>exportJSON(),50);}} style={{ fontSize:10, padding:'3px 8px', borderRadius:6, border:`1px solid ${C.teal}`, background:C.white, color:C.teal, cursor:'pointer', fontWeight:600 }}>
+                      📤 Export
+                    </button>
+                  </div>
+                </Card>
+              );
+            })}
+          </>
+        )}
+
+        {list.length === 0 && (
+          <div style={{ textAlign:'center', color:C.txt2, padding:'60px 20px' }}>
+            <div style={{ fontSize:52, marginBottom:12 }}>🏠</div>
+            <div style={{ fontWeight:700, color:C.txt, marginBottom:4 }}>No inspections yet</div>
+            <div style={{ fontSize:13 }}>Tap New Inspection to begin</div>
+          </div>
+        )}
+        <div style={{ textAlign:'center', color:C.txt2, fontSize:11, marginTop:24 }}>NZS 4306:2005 · BOINZ ABS · {APP_VER_DISPLAY}</div>
+      </div>
+    </div>
+  );
+
+  // ═══ INFO (DETAILS) PAGE ══════════════════════════════════════
+  if (page === 'info' && cur) {
+    const gi = cur.generalInfo || blankGeneralInfo();
+
+    return (
+      <Layout ui={ui} title="General Information">
+        {/* Migration banner */}
+        {(cur._migratedToV3 || migrationBanner) && (
+          <div style={{ background: '#FFF8EC', border: '1px solid #C8A04A', borderRadius: 8, padding: '10px 14px', marginBottom: 10, fontSize: 12, color: '#8B5E00', lineHeight: 1.5 }}>
+            ⚠ Building characteristics were converted from an earlier version into report wording. Please review each entry before use.
+          </div>
+        )}
+
+        {/* File No. */}
+        <Card style={{ border: `1px solid ${C.teal}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: C.txt2, textTransform: 'uppercase', letterSpacing: '.04em' }}>File No.</span>
+          <span style={{ fontFamily: 'monospace', fontSize: 15, fontWeight: 700, color: C.teal }}>{cur.fileNo}</span>
+        </Card>
+
+        {/* ── ADDRESS ── */}
+        <Card key={`addr-${cur.id}`}>
+          <SecTitle>Property Address</SecTitle>
+          <FRow label="Address" required>
+            <input style={inp} defaultValue={gi.address?.asPerTitle || cur.insp?.address || ''}
+              onBlur={e => {
+                const v = e.target.value;
+                const g = JSON.parse(JSON.stringify(cur.generalInfo || blankGeneralInfo()));
+                g.address.asPerTitle = v;
+                // Single source of truth — mirror to insp.address for report/header reads
+                saveInspection({ ...cur, generalInfo: g, insp: { ...cur.insp, address: v } });
+              }}
+              placeholder="11 Hardley Avenue, Mount Roskill, Auckland 1041" />
+          </FRow>
+        </Card>
+
+        {/* ── CLIENT INFORMATION ── */}
+        <Card key={`client-${cur.id}`}>
+          <SecTitle>Client Information</SecTitle>
+          {[['name', 'Client Name', true], ['phone', 'Phone'], ['email', 'Email'], ['address', 'Client Address']].map(([k, lb, req]) => (
+            <FRow key={k} label={lb} required={req}>
+              <input style={inp} defaultValue={cur.client[k] || ''} onBlur={e => updF('client', k, e.target.value)} />
+            </FRow>
+          ))}
+          <FRow2>
+            <FRow label="Report Delivery">
+              <select style={inp} value={cur.client.delivery} onChange={e => updF('client', 'delivery', e.target.value)}>
+                {['By Email', 'By Post', 'Portal'].map(o => <option key={o}>{o}</option>)}
+              </select>
+            </FRow>
+            <FRow label="Payment">
+              <select style={inp} value={cur.client.payment} onChange={e => updF('client', 'payment', e.target.value)}>
+                {['N/A', 'Paid', 'Unpaid', 'Invoice Sent'].map(o => <option key={o}>{o}</option>)}
+              </select>
+            </FRow>
+          </FRow2>
+        </Card>
+
+        {/* ── INSPECTION INFORMATION ── */}
+        <Card key={`insp-${cur.id}`}>
+          <SecTitle>Inspection Information</SecTitle>
+          <FRow2>
+            <FRow label="Date *"><input style={inp} type="date" value={cur.insp.date} onChange={e => updF('insp', 'date', e.target.value)} /></FRow>
+            <FRow label="Time"><input style={inp} type="time" value={cur.insp.time} onChange={e => updF('insp', 'time', e.target.value)} /></FRow>
+          </FRow2>
+          <FRow label="Scope">
+            <select style={inp} value={cur.insp.scope} onChange={e => updF('insp', 'scope', e.target.value)}>
+              {['House condition inspection', 'Pre-purchase inspection', 'Pre-sale inspection', 'Maintenance inspection'].map(o => <option key={o}>{o}</option>)}
+            </select>
+          </FRow>
+          <FRow label="Inspector Name" required><input style={inp} defaultValue={cur.insp.inspector} onBlur={e => updF('insp', 'inspector', e.target.value)} /></FRow>
+          <FRow label="Qualifications"><input style={inp} defaultValue={cur.insp.qualifications} onBlur={e => updF('insp', 'qualifications', e.target.value)} /></FRow>
+          <FRow2>
+            <FRow label="Weather *">
+              <select style={inp} value={cur.insp.weather} onChange={e => updF('insp', 'weather', e.target.value)}>
+                <option value="">Select</option>{WEATHER.map(o => <option key={o}>{o}</option>)}
+              </select>
+            </FRow>
+            <FRow label="Ground">
+              <select style={inp} value={cur.insp.soil} onChange={e => updF('insp', 'soil', e.target.value)}>
+                <option value="">Select</option>{SOIL.map(o => <option key={o}>{o}</option>)}
+              </select>
+            </FRow>
+          </FRow2>
+          <FRow label="Occupancy">
+            <select style={inp} value={cur.insp.occupancy} onChange={e => updF('insp', 'occupancy', e.target.value)}>
+              <option value="">Select</option>{OCCUPANCY.map(o => <option key={o}>{o}</option>)}
+            </select>
+          </FRow>
+          <FRow label="People Present"><input style={inp} defaultValue={cur.insp.people} onBlur={e => updF('insp', 'people', e.target.value)} placeholder="e.g. Ruby Kim (Home owner)" /></FRow>
+          <FRow label="Areas Not Inspected *">
+            <textarea style={{ ...inp, minHeight: 60, resize: 'none' }} defaultValue={cur.insp.areasNotInspected} onBlur={e => updF('insp', 'areasNotInspected', e.target.value)} />
+          </FRow>
+        </Card>
+
+        {/* ── BUILDING CHARACTERISTICS (report order) ── */}
+        <Card>
+          <SecTitle>Building Characteristics</SecTitle>
+          <div style={{ fontSize: 11, color: C.txt2, marginBottom: 12, lineHeight: 1.5 }}>
+            Write each entry as it should read in the report. Where information was not established, say so
+            (e.g. "No information was provided regarding recently added flashings.").
+          </div>
+          <BCField label="Age of Building" value={gi?.bc?.age} onCommit={v => updGI(['bc','age'], v)}
+            placeholder="Approximately 25 years old (constructed 2000)." />
+          <BCField label="Building Type" value={gi?.bc?.buildingType} onCommit={v => updGI(['bc','buildingType'], v)}
+            placeholder="Residential two-storey detached dwelling" rows={1} />
+          <BCField label="Levels" value={gi?.bc?.levels} onCommit={v => updGI(['bc','levels'], v)} placeholder="Two storeys." rows={1} />
+          <BCField label="Orientation of Building" value={gi?.bc?.orientation} onCommit={v => updGI(['bc','orientation'], v)}
+            placeholder="The dwelling fronts the main street and is oriented generally to the north." />
+          <BCField label="Site Exposure" value={gi?.bc?.siteExposure} onCommit={v => updGI(['bc','siteExposure'], v)}
+            placeholder="Climate Zone 1. The site is located within an Exposure Zone C and Wind Zone Medium." rows={3} />
+          <BCField label="Contour and Vegetation" value={gi?.bc?.contourVegetation} onCommit={v => updGI(['bc','contourVegetation'], v)}
+            placeholder="The site slopes down from the northern (street) side toward the south…" rows={3} />
+          <BCField label="Wall Cladding Type" value={gi?.bc?.wallCladding} onCommit={v => updGI(['bc','wallCladding'], v)}
+            placeholder="Monolithic EIFS (Exterior Insulation and Finish System) cladding" />
+          <BCField label="Construction Type" value={gi?.bc?.constructionType} onCommit={v => updGI(['bc','constructionType'], v)}
+            placeholder="Timber-framed construction" rows={1} />
+          <BCField label="Roof Cladding" value={gi?.bc?.roofCladding} onCommit={v => updGI(['bc','roofCladding'], v)}
+            placeholder="Steel tile roof cladding" rows={1} />
+          <BCField label="Roof Design" value={gi?.bc?.roofDesign} onCommit={v => updGI(['bc','roofDesign'], v)}
+            placeholder="Pitched steel tile roof with guttering" rows={1} />
+          <BCField label="Foundation Type" value={gi?.bc?.foundationType} onCommit={v => updGI(['bc','foundationType'], v)}
+            placeholder="Concrete slab and pile foundation system" rows={1} />
+          <BCField label="Property Furnished" value={gi?.bc?.furnished} onCommit={v => updGI(['bc','furnished'], v)}
+            placeholder="The property was furnished at the time of inspection." rows={1} />
+          <BCField label="Recent Redecoration or Repairs" value={gi?.bc?.alterations} onCommit={v => updGI(['bc','alterations'], v)}
+            placeholder={"One item per line, e.g.\n\u2022 Internal partition wall added at ground level (approximately 10 years ago).\n\u2022 Garage converted to storage (over 10 years ago)."} rows={5} />
+          <BCField label="Recently Added Flashings" value={gi?.bc?.addedFlashings} onCommit={v => updGI(['bc','addedFlashings'], v)}
+            placeholder="No information was provided regarding recently added flashings." rows={2} />
+          <BCField label="Note" value={gi?.bc?.note} onCommit={v => updGI(['bc','note'], v)}
+            placeholder="(No additional information provided.)" rows={1} />
+        </Card>
+
+        {/* ── SERVICES ── */}
+        <Card>
+          <SecTitle>Services</SecTitle>
+          <BCField label="Water Source" value={gi?.services?.water} onCommit={v => updGI(['services','water'], v)}
+            placeholder="Connected to the municipal water supply (Watercare)" rows={1} />
+          <BCField label="Sewage Disposal" value={gi?.services?.sewage} onCommit={v => updGI(['services','sewage'], v)}
+            placeholder="Connected to the public sewer network." rows={1} />
+          <BCField label="Gas Meter" value={gi?.services?.gas} onCommit={v => updGI(['services','gas'], v)}
+            placeholder="A gas meter was observed." rows={1} />
+        </Card>
+
+        {/* ── ZONES (discrete — used in Site section 1.2 and WT matrix) ── */}
+        <Card>
+          <SecTitle>Zones</SecTitle>
+          <div style={{ fontSize: 11, color: C.txt2, marginBottom: 12, lineHeight: 1.5 }}>
+            Recorded separately for the Site section and the weathertightness assessment.
+          </div>
+          <FRow2>
+            <FRow label="Climate Zone">
+              <select style={inp} value={gi.zones?.climate || ''} onChange={e => updGI(['zones','climate'], e.target.value)}>
+                <option value="">Select</option>{ZONE_CLIMATE.map(o => <option key={o}>{o}</option>)}
+              </select>
+            </FRow>
+            <FRow label="Exposure Zone">
+              <select style={inp} value={gi.zones?.exposure || ''} onChange={e => updGI(['zones','exposure'], e.target.value)}>
+                <option value="">Select</option>{ZONE_EXPOSURE.map(o => <option key={o}>{o}</option>)}
+              </select>
+            </FRow>
+          </FRow2>
+          <FRow2>
+            <FRow label="Wind Zone">
+              <select style={inp} value={gi.zones?.wind || ''} onChange={e => updGI(['zones','wind'], e.target.value)}>
+                <option value="">Select</option>{ZONE_WIND.map(o => <option key={o}>{o}</option>)}
+              </select>
+            </FRow>
+            <FRow label="Earthquake Zone">
+              <select style={inp} value={gi.zones?.eq || ''} onChange={e => updGI(['zones','eq'], e.target.value)}>
+                <option value="">Select</option>{ZONE_EQ.map(o => <option key={o}>{o}</option>)}
+              </select>
+            </FRow>
+          </FRow2>
+        </Card>
+
+        {/* ── WEATHERTIGHTNESS ── */}
+        <Card style={{ border: `2px solid ${cur.wt.rating === 'HIGH' ? '#C62828' : cur.wt.rating === 'MEDIUM' ? '#EF6C00' : cur.wt.rating === 'LOW' ? C.done : C.border}` }}>
+          <SecTitle color={cur.wt.rating === 'HIGH' ? '#C62828' : C.teal}>⚠ Weathertightness Risk Assessment</SecTitle>
+          {!cur.wt.rating && (
+            <div style={{ background: '#FFF3DC', border: `1px solid ${C.amber}`, borderRadius: 8, padding: '10px 14px', marginBottom: 14, fontSize: 12, color: '#D4820A', fontWeight: 600 }}>
+              Required — must be completed before generating report
+            </div>
+          )}
+          {WT_FACTORS.map(f => (
+            <div key={f.id} style={{ marginBottom: 10 }}>
+              <label style={lbl}>{f.label}</label>
+              <select style={{ ...inp, borderColor: cur.wt.factors[f.id] && f.highRisk.includes(cur.wt.factors[f.id]) ? '#C62828' : C.border }}
+                value={cur.wt.factors[f.id] || ''} onChange={e => updWT(f.id, e.target.value)}>
+                <option value="">Select…</option>
+                {f.options.map(o => <option key={o}>{o}{f.highRisk.includes(o) ? ' ⚠' : ''}</option>)}
+              </select>
+            </div>
+          ))}
+          <FRow label="Risk Rating">
+            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+              {['LOW', 'MEDIUM', 'HIGH'].map(r => {
+                const auto = calcWTRisk(cur.wt.factors);
+                const cl = r === 'HIGH' ? '#C62828' : r === 'MEDIUM' ? '#EF6C00' : C.done;
+                return (
+                  <button key={r} onClick={() => updF('wt', 'rating', r)} style={{ flex: 1, padding: '11px 6px', border: `2px solid ${cur.wt.rating === r ? cl : C.border}`, borderRadius: 8, background: cur.wt.rating === r ? (r === 'HIGH' ? '#FFEBEE' : r === 'MEDIUM' ? '#FFF3E0' : '#E8F5E9') : C.white, color: cur.wt.rating === r ? cl : C.txt2, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+                    {r}{auto === r ? ' ●' : ''}
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{ fontSize: 11, color: C.txt2 }}>● = Auto-suggested from risk factors</div>
+          </FRow>
+          <FRow label="Risk Context Notes">
+            <textarea style={{ ...inp, minHeight: 80, resize: 'none' }} defaultValue={cur.wt.context}
+              onBlur={e => updF('wt', 'context', e.target.value)}
+              placeholder="Describe weathertightness risk factors observed…" />
+          </FRow>
+          <FRow label="Invasive Testing">
+            <select style={inp} value={cur.wt.invasive} onChange={e => updF('wt', 'invasive', e.target.value)}>
+              {['Recommended', 'Not required at this time', 'Already completed'].map(o => <option key={o}>{o}</option>)}
+            </select>
+          </FRow>
+        </Card>
+
+        {/* ── SCOPE & LIMITATIONS ── */}
+        <Card key={`scope-${cur.id}`}>
+          <SecTitle>Scope & Limitations Notes</SecTitle>
+          <div style={{ fontSize: 11, color: C.txt2, marginBottom: 8 }}>Auto-populated from Tenure / LIM date. Edit as required.</div>
+          <textarea style={{ ...inp, minHeight: 100, resize: 'none' }}
+            defaultValue={gi.scopeLimitations || ''}
+            onBlur={e => updGI(['scopeLimitations'], e.target.value)}
+            placeholder="Scope and limitation statements will appear here automatically." />
+        </Card>
+
+        {/* ── PHOTO SETTINGS ── */}
+        <Card>
+          <SecTitle>Photo Settings</SecTitle>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 0' }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: C.txt }}>Save photos to Downloads folder</div>
+              <div style={{ fontSize: 11, color: C.txt2, marginTop: 2 }}>Recommended — protects evidence if app data is cleared</div>
+            </div>
+            <button onClick={() => saveInspection({ ...cur, saveDevicePhotos: !cur.saveDevicePhotos })}
+              style={{ width: 48, height: 28, borderRadius: 14, border: 'none', cursor: 'pointer', background: cur.saveDevicePhotos ? C.teal : C.border, position: 'relative' }}>
+              <span style={{ position: 'absolute', top: 3, left: cur.saveDevicePhotos ? 22 : 3, width: 22, height: 22, borderRadius: '50%', background: '#fff', transition: 'left .2s', boxShadow: '0 1px 3px rgba(0,0,0,.2)' }} />
+            </button>
+          </div>
+        </Card>
+
+        <BtnPrimary onClick={() => setPage('checklist')} style={{ marginBottom: 8 }}>Start Inspection Checklist →</BtnPrimary>
+        <BtnSecondary onClick={() => setPage('summary')}>View Summary & Report</BtnSecondary>
+        <button onClick={exportJSON} style={{ width: '100%', background: C.white, color: C.teal, border: `1.5px solid ${C.teal}`, borderRadius: 10, padding: '11px 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 8 }}>
+          📤 Export as JSON (for other device)
+        </button>
+        <div style={{ marginTop: 12, textAlign: 'center' }}>
+          <button onClick={() => delInsp(cur.id)} style={{ background: 'none', border: 'none', color: C.danger, fontSize: 13, cursor: 'pointer', textDecoration: 'underline' }}>Delete Inspection</button>
+        </div>
+      </Layout>
+    );
+  }
+
+
+  // ═══ CHECKLIST PAGE ═══════════════════════════════════════════
+  if (page === 'checklist' && cur) {
+    const cat = CATS[catTab];
+    const cs = catSt(cat.id, cur);
+
+    return (
+      <Layout ui={ui} title={cat.label}>
+        {/* Category tabs */}
+        <div style={{ display:'flex', gap:5, overflowX:'auto', marginBottom:14, paddingBottom:4 }}>
+          {CATS.map((c,i) => {
+            const s = catSt(c.id, cur);
+            const hasIncomplete = c.items.some(item => itemHasIncomplete(cur.items[item.id]));
+            return (
+              <button key={c.id} onClick={()=>setCatTab(i)} style={{ flex:'0 0 auto', padding:'6px 11px', borderRadius:20, border:'none', background:catTab===i?C.primary:C.white, color:catTab===i?'#fff':C.txt2, fontSize:11, fontWeight:catTab===i?700:500, cursor:'pointer', boxShadow:catTab===i?'0 2px 8px rgba(75,57,239,.3)':'0 1px 3px rgba(0,0,0,.08)', display:'flex', alignItems:'center', gap:4, whiteSpace:'nowrap' }}>
+                {c.icon} {c.label.replace(/^\d+\.\s/,'')}
+                {hasIncomplete && <span style={{ color:C.amber, fontWeight:700 }}>!</span>}
+                {s===ST.done && <span style={{ width:6, height:6, borderRadius:'50%', background:C.done }}/>}
+                {s===ST.na && <span style={{ width:6, height:6, borderRadius:'50%', background:C.na }}/>}
+              </button>
+            );
+          })}
+        </div>
+
+        <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:12 }}>
+          <span style={{ fontSize:22 }}>{cat.icon}</span>
+          <span style={{ fontWeight:700, fontSize:16, color:C.txt }}>{cat.label}</span>
+          <span style={{ fontSize:10, fontWeight:700, padding:'3px 10px', borderRadius:20,
+            background:cs===ST.done?'#E8F5F3':cs===ST.na?C.bg:'#FFF3DC',
+            color:cs===ST.done?C.done:cs===ST.na?C.na:C.amber,
+            border:`1px solid ${cs===ST.done?C.done:cs===ST.na?C.border:C.amber}` }}>{cs}</span>
+        </div>
+
+        {/* ── Category overview photos ── */}
+        {(() => {
+          const catPhotos = cur.catPhotos?.[cat.id]?.photos || [];
+          return (
+            <Card style={{ border:`1px solid ${C.teal}` }}>
+              <div style={{ display:'flex', alignItems:'center', marginBottom:10 }}>
+                <SecTitle>Overview Photos</SecTitle>
+                <div style={{ flex:1 }}/>
+                {catPhotos.length > 0 && (
+                  <span style={{ fontSize:11, fontWeight:700, color:C.teal, marginTop:-12 }}>{catPhotos.length}</span>
+                )}
+              </div>
+              <div style={{ fontSize:11, color:C.txt2, marginBottom:10, lineHeight:1.5 }}>
+                General photos of {cat.label.replace(/^\d+\.\s/,'')} — evidence the area was inspected.
+                Saved to Downloads as {CAT_CODE[cat.id] || cat.id.toUpperCase()}-01, -02…
+              </div>
+
+              {catPhotos.length > 0 && (
+                <div style={{ display:'flex', flexWrap:'wrap', gap:8, marginBottom:10 }}>
+                  {catPhotos.map((ph, idx) => (
+                    <div key={ph.photoId||idx} style={{ position:'relative' }}>
+                      <PhotoThumb photoRef={ph} onClick={()=>setPhotoMod({ catId:cat.id, idx })}/>
+                      <button onClick={e=>{ e.stopPropagation(); deleteCatPhoto(cat.id, idx); }}
+                        title="Remove photo"
+                        style={{ position:'absolute', top:-6, right:-6, width:22, height:22, borderRadius:'50%', border:'none', background:C.danger, color:'#fff', fontSize:12, fontWeight:700, cursor:'pointer', lineHeight:1, boxShadow:'0 1px 4px rgba(0,0,0,.3)' }}>✕</button>
+                      <div style={{ fontSize:9, fontFamily:'monospace', color:C.txt2, textAlign:'center', marginTop:2 }}>{ph.photoLabel}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div style={{ display:'flex', gap:6 }}>
+                <button onClick={()=>{
+                  pendingPhotoItem.current = { catId: cat.id };
+                  fileRef.current.setAttribute('capture', 'environment');
+                  fileRef.current.click();
+                }} style={{ flex:1, padding:'9px 11px', borderRadius:6, border:`1px solid ${C.teal}`, background:C.white, color:C.teal, fontSize:12, fontWeight:600, cursor:'pointer' }}>📷 Camera</button>
+                <button onClick={()=>{
+                  pendingPhotoItem.current = { catId: cat.id };
+                  fileRef.current.removeAttribute('capture');
+                  fileRef.current.click();
+                }} style={{ flex:1, padding:'9px 11px', borderRadius:6, border:`1px solid ${C.teal}`, background:C.white, color:C.teal, fontSize:12, fontWeight:600, cursor:'pointer' }}>🖼 Gallery</button>
+              </div>
+            </Card>
+          );
+        })()}
+
+        {cat.items.map(item => {
+          const it = cur.items[item.id] || blankItem();
+          const defects = it.defects || [];
+          const expanded = it.status !== ST.pending || defects.length > 0;
+          const incomplete = defects.some(df => !isDefectComplete(df));
+          const worst = GRADES.find(g => defects.some(df => df.grade === g.id));
+
+          return (
+            <Card key={item.id} style={{ padding:'12px 14px', marginBottom:8,
+              border: defects.length
+                ? (incomplete ? `2px solid ${C.amber}` : `2px solid ${worst?.color || C.danger}`)
+                : `1px solid ${C.border}` }}>
+
+              {/* Item header */}
+              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                <div style={{ flex:1 }}>
+                  <span style={{ fontSize:13, fontWeight:500, color:C.txt }}>{item.l}</span>
+                  {defects.length > 0 && (
+                    <span style={{ marginLeft:6, fontSize:10, fontWeight:700, padding:'1px 6px', borderRadius:4, background:C.bg, color:C.txt2 }}>
+                      {defects.length} defect{defects.length > 1 ? 's' : ''}
+                    </span>
+                  )}
+                </div>
+                <div style={{ display:'flex', gap:5 }}>
+                  <button onClick={()=>updItem(item.id,{status:ST.done})}
+                    style={{ padding:'6px 10px', borderRadius:6, border:'none', fontSize:11, fontWeight:700, cursor:'pointer', background:it.status===ST.done&&!defects.length?C.done:C.bg, color:it.status===ST.done&&!defects.length?'#fff':C.txt2 }}>✓ OK</button>
+                  <button onClick={()=>updItem(item.id,{status:ST.na})}
+                    style={{ padding:'6px 10px', borderRadius:6, border:'none', fontSize:11, fontWeight:700, cursor:'pointer', background:it.status===ST.na?C.na:C.bg, color:it.status===ST.na?'#fff':C.txt2 }}>N/A</button>
+                  <button onClick={()=>addDefect(item.id)}
+                    style={{ padding:'6px 10px', borderRadius:6, border:'none', fontSize:11, fontWeight:700, cursor:'pointer', background:defects.length?C.danger:C.bg, color:defects.length?'#fff':C.txt2 }}>⚑ +</button>
+                </div>
+              </div>
+
+              {expanded && (
+                <div style={{ marginTop:12 }}>
+                  {defects.map((df, dIdx) => {
+                    const g = GRADES.find(x => x.id === df.grade);
+                    const bad = !isDefectComplete(df);
+                    return (
+                      <div key={df.id} style={{ border:`1.5px solid ${bad ? C.amber : (g?.color || C.border)}`,
+                        borderLeft:`5px solid ${g?.color || C.txt2}`, borderRadius:8, padding:12, marginBottom:10, background:C.white }}>
+
+                        <div style={{ display:'flex', alignItems:'center', marginBottom:10 }}>
+                          <span style={{ fontFamily:'monospace', fontSize:13, fontWeight:700, color:g?.color || C.txt2 }}>{df.defectRef}</span>
+                          {g && <span style={{ marginLeft:8, fontSize:10, fontWeight:700, padding:'2px 8px', borderRadius:10, background:g.bg, color:g.color }}>{g.label}</span>}
+                          <div style={{ flex:1 }}/>
+                          <button onClick={()=>removeDefect(item.id, df.id)}
+                            style={{ background:'none', border:'none', color:C.danger, fontSize:12, fontWeight:600, cursor:'pointer', padding:'2px 4px' }}>✕ Delete</button>
+                        </div>
+
+                        {bad && (
+                          <div style={{ background:'#FFF8EC', border:`1px solid ${C.amber}`, borderRadius:6, padding:'8px 10px', marginBottom:10, fontSize:11, color:'#D4820A', fontWeight:600 }}>
+                            ⚠ Required: Grade + Location + Description + Implication + Recommendation
+                          </div>
+                        )}
+
+                        {/* Photos for this defect */}
+                        {df.photos?.length > 0 && (
+                          <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom:10 }}>
+                            {df.photos.map((ph, idx) => (
+                              <div key={ph.photoId||idx} style={{ position:'relative' }}>
+                                <PhotoThumb photoRef={ph} onClick={()=>setPhotoMod({ itemId:item.id, defectId:df.id, idx })}/>
+                                <button onClick={e=>{ e.stopPropagation(); deletePhoto(item.id, df.id, idx); }}
+                                  title="Remove photo"
+                                  style={{ position:'absolute', top:-6, right:-6, width:22, height:22, borderRadius:'50%', border:'none', background:C.danger, color:'#fff', fontSize:12, fontWeight:700, cursor:'pointer', lineHeight:1, boxShadow:'0 1px 4px rgba(0,0,0,.3)' }}>✕</button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Grade */}
+                        <FRow label="Grade (required)">
+                          <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:8 }}>
+                            {GRADES.map(gr => (
+                              <button key={gr.id} onClick={()=>handleGradeSelect(item.id, df.id, gr.id)} title={gr.tip}
+                                style={{ flex:'1 1 auto', padding:'8px 6px', borderRadius:8, border:`2px solid ${df.grade===gr.id?gr.color:C.border}`, background:df.grade===gr.id?gr.bg:C.white, color:df.grade===gr.id?gr.color:C.txt2, fontWeight:700, fontSize:11, cursor:'pointer', textAlign:'center', minWidth:80 }}>
+                                {gr.id==='significant'?'🔴':gr.id==='maintenance'?'🟠':'🟡'} {gr.label}
+                              </button>
+                            ))}
+                          </div>
+                          {g && <div style={{ fontSize:11, color:C.txt2, fontStyle:'italic' }}>{g.tip}</div>}
+                        </FRow>
+
+                        {/* Axes */}
+                        <FRow label="Additional Attributes (optional)">
+                          <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                            {AXES.map(ax => {
+                              const checked = (df.axes||[]).includes(ax.id);
+                              return (
+                                <label key={ax.id} style={{ display:'flex', alignItems:'center', gap:6, cursor:'pointer', padding:'7px 10px', borderRadius:8, border:`1.5px solid ${checked?C.txt2:C.border}`, background:checked?'#F5F5F5':C.white, fontSize:12, fontWeight:checked?600:400, color:C.txt, userSelect:'none' }}>
+                                  <input type="checkbox" checked={checked} style={{ width:14, height:14, accentColor:C.txt2 }}
+                                    onChange={async e => {
+                                      const axes = e.target.checked
+                                        ? [...(df.axes||[]), ax.id]
+                                        : (df.axes||[]).filter(a=>a!==ax.id);
+                                      const patch = { axes };
+                                      if (ax.id==='further_investigation' && e.target.checked && !df.recommendation?.includes('Further investigation')) {
+                                        patch.recommendation = (df.recommendation||'') + (df.recommendation?' ':'') + 'Further investigation by a specialist is recommended.';
+                                      }
+                                      await updDefect(item.id, df.id, patch);
+                                    }}/>
+                                  {ax.label}
+                                </label>
+                              );
+                            })}
+                          </div>
+                          <div style={{ fontSize:10, color:C.txt2, marginTop:4, fontStyle:'italic' }}>These are not defect grades — no colour is applied</div>
+                        </FRow>
+
+                        {/* Material */}
+                        <FRow2>
+                          <FRow label="Material">
+                            <select style={inp} value={df.material||''} onChange={e=>updDefect(item.id, df.id, {material:e.target.value})}>
+                              <option value="">Select</option>{MATERIALS.map(o=><option key={o}>{o}</option>)}
+                            </select>
+                          </FRow>
+                          <div/>
+                        </FRow2>
+
+                        {/* Four required fields — uncontrolled, committed on blur */}
+                        <DefectField label="📍 Location *" value={df.location} filled={!!df.location}
+                          onCommit={v=>updDefect(item.id, df.id, {location:v})}
+                          placeholder="e.g. North elevation, window head, W3"/>
+                        <DefectField label="🔍 Description *" value={df.description} filled={!!df.description} rows={3}
+                          onCommit={v=>updDefect(item.id, df.id, {description:v})}
+                          placeholder="Observed condition, measurements, extent. Observations only — do not state cause."/>
+                        <DefectField label="⚠ Implication *" value={df.implication} filled={!!df.implication} rows={3}
+                          onCommit={v=>updDefect(item.id, df.id, {implication:v})}
+                          placeholder="Consequence if not addressed — risk to structure, weather resistance, health, or value"/>
+                        <DefectField label="✅ Recommendation *" value={df.recommendation} filled={!!df.recommendation} rows={3}
+                          onCommit={v=>updDefect(item.id, df.id, {recommendation:v})}
+                          placeholder="Specific action required, or 'Further investigation by specialist recommended'"/>
+
+                        {/* Photo capture for this defect */}
+                        <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginTop:4 }}>
+                          <button onClick={()=>{
+                            pendingPhotoItem.current = { itemId:item.id, defectId:df.id };
+                            fileRef.current.setAttribute('capture', 'environment');
+                            fileRef.current.click();
+                          }} style={{ padding:'7px 11px', borderRadius:6, border:`1px solid ${C.border}`, background:C.white, color:C.txt2, fontSize:12, cursor:'pointer' }}>📷 Camera</button>
+                          <button onClick={()=>{
+                            pendingPhotoItem.current = { itemId:item.id, defectId:df.id };
+                            fileRef.current.removeAttribute('capture');
+                            fileRef.current.click();
+                          }} style={{ padding:'7px 11px', borderRadius:6, border:`1px solid ${C.border}`, background:C.white, color:C.txt2, fontSize:12, cursor:'pointer' }}>🖼 Gallery</button>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  <button onClick={()=>addDefect(item.id)}
+                    style={{ width:'100%', padding:'10px', borderRadius:8, border:`1.5px dashed ${C.danger}`, background:C.white, color:C.danger, fontSize:13, fontWeight:700, cursor:'pointer' }}>
+                    ⚑ + Add {defects.length ? 'another ' : ''}defect to {item.l}
+                  </button>
+                </div>
+              )}
+            </Card>
+          );
+        })}
+
+        <div style={{height:10}}/>
+        {catTab < CATS.length-1
+          ? <BtnPrimary onClick={()=>setCatTab(catTab+1)}>Next: {CATS[catTab+1].label} →</BtnPrimary>
+          : <BtnPrimary onClick={()=>setPage('summary')}>Go to Summary →</BtnPrimary>
+        }
+      </Layout>
+    );
+  }
+
+  // ═══ SUMMARY PAGE ═════════════════════════════════════════════
+  if (page === 'summary' && cur) {
+    const errors = validateReport(cur);
+    const sigPct = flagN > 0 ? Math.round(sigN/flagN*100) : 0;
+
+    return (
+      <Layout ui={ui} title="Summary & Report">
+        {/* Stats */}
+        <div style={{ display:'flex', gap:8, marginBottom:14 }}>
+          {[[`${prog}%`,'Progress',C.primary],[flagN,'Flagged',flagN>0?C.danger:C.done],[sigN,'Significant',sigN>0?'#C62828':C.txt2],[incompleteN,'Incomplete',incompleteN>0?C.amber:C.txt2]].map(([v,l,cl])=>(
+            <div key={l} style={{ flex:1, background:C.white, borderRadius:10, padding:'9px 6px', textAlign:'center', boxShadow:'0 1px 4px rgba(0,0,0,.06)' }}>
+              <div style={{ fontSize:17, fontWeight:800, color:cl }}>{v}</div>
+              <div style={{ fontSize:9, color:C.txt2, marginTop:2, fontWeight:600, textTransform:'uppercase', letterSpacing:'.04em' }}>{l}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* High sig% warning */}
+        {sigPct > 40 && (
+          <div style={{ background:'#FFF3E0', border:`1px solid #EF6C00`, borderRadius:8, padding:'10px 14px', marginBottom:10, fontSize:12, color:'#EF6C00', fontWeight:600 }}>
+            ⚠ {sigPct}% of flagged items are Significant Defect — review classifications for over-rating
+          </div>
+        )}
+
+        {/* Validation warnings — not blocking, tap to navigate */}
+        {errors.length > 0 && (
+          <Card style={{ border:`1.5px solid ${C.amber}`, background:'#FFFBF0', marginBottom:10 }}>
+            <SecTitle color={C.amber}>⚠ Incomplete items ({errors.length}) — report will still generate</SecTitle>
+            {errors.map((e,i) => (
+              <div key={i} style={{ fontSize:12, color:'#D4820A', marginBottom:4, cursor:'pointer', display:'flex', alignItems:'flex-start', gap:6 }}
+                onClick={()=>{ if(e.section==='checklist'&&e.catId){const idx=CATS.findIndex(c=>c.id===e.catId);if(idx>=0)setCatTab(idx);} setPage(e.section||'info'); }}>
+                <span>•</span><span>{e.msg} <span style={{color:C.teal,fontSize:11}}>(tap to fix)</span></span>
+              </div>
+            ))}
+          </Card>
+        )}
+
+        {/* Weathertightness */}
+        {cur.wt.rating && (
+          <Card style={{ border:`2px solid ${cur.wt.rating==='HIGH'?'#C62828':cur.wt.rating==='MEDIUM'?'#EF6C00':C.done}` }}>
+            <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+              <span style={{ fontSize:28 }}>{cur.wt.rating==='HIGH'?'🔴':cur.wt.rating==='MEDIUM'?'🟡':'🟢'}</span>
+              <div>
+                <div style={{ fontSize:11, color:C.txt2, fontWeight:600, textTransform:'uppercase', letterSpacing:'.04em' }}>Weathertightness Risk</div>
+                <div style={{ fontSize:17, fontWeight:900, color:cur.wt.rating==='HIGH'?'#C62828':cur.wt.rating==='MEDIUM'?'#EF6C00':C.done }}>{cur.wt.rating} RISK PROFILE</div>
+              </div>
+            </div>
+          </Card>
+        )}
+
+        {/* Defects by grade */}
+        {GRADES.map(g => {
+          const items = defectList.filter(df=>df.grade===g.id);
+          if (!items.length) return null;
+          return (
+            <Card key={g.id} style={{ border:`1px solid ${g.color}` }}>
+              <SecTitle color={g.color}>{g.id==='significant'?'🔴':g.id==='maintenance'?'🟠':'🟡'} {g.label} ({items.length})</SecTitle>
+              {items.map(d => {
+                return (
+                  <div key={d.id} style={{ padding:'8px 0', borderBottom:`1px solid ${C.border}` }}>
+                    <div style={{ fontWeight:700, fontSize:12, color:C.txt, marginBottom:2 }}>
+                      <span style={{ fontFamily:'monospace', marginRight:6, color:g.color }}>{d.defectRef}</span>
+                      {d.catShort} › {d.item}
+                      {(d.axes||[]).map(ax => <span key={ax} style={{ marginLeft:6, fontSize:10, background:'#F5F5F5', color:C.txt2, padding:'1px 6px', borderRadius:8, fontWeight:400 }}>{AXES.find(a=>a.id===ax)?.label}</span>)}
+                    </div>
+                    {d.location && <div style={{ fontSize:11, color:C.txt2 }}>📍 {d.location}</div>}
+                    {d.description && <div style={{ fontSize:12, color:C.txt, marginTop:2 }}>{d.description}</div>}
+                    {d.recommendation && <div style={{ fontSize:11, color:C.primary, fontWeight:600, marginTop:2 }}>→ {d.recommendation}</div>}
+                  </div>
+                );
+              })}
+            </Card>
+          );
+        })}
+
+        {/* Moisture Test */}
+        <Card style={{ border:`1px solid ${C.teal}` }}>
+          <SecTitle>💧 Moisture Test Module</SecTitle>
+          <FRow2>
+            <FRow label="Meter Make/Model">
+              <select style={inp} value={cur.moisture.meterMake} onChange={e=>saveInspection({...cur,moisture:{...cur.moisture,meterMake:e.target.value}})}>
+                <option value="">Select</option>{METERS.map(o=><option key={o}>{o}</option>)}
+              </select>
+            </FRow>
+            <FRow label="Meter Type">
+              <select style={inp} value={cur.moisture.meterType} onChange={e=>saveInspection({...cur,moisture:{...cur.moisture,meterType:e.target.value}})}>
+                {['Non-invasive (capacitance)','Pin type (invasive)','Combination'].map(o=><option key={o}>{o}</option>)}
+              </select>
+            </FRow>
+          </FRow2>
+          <FRow2>
+            <FRow label="Control Location">
+              <input style={inp} value={cur.moisture.controlLocation} onChange={e=>saveInspection({...cur,moisture:{...cur.moisture,controlLocation:e.target.value}})} placeholder="Dry reference surface"/>
+            </FRow>
+            <FRow label="Control Reading (% WME)">
+              <input style={inp} type="number" value={cur.moisture.controlReading} onChange={e=>saveInspection({...cur,moisture:{...cur.moisture,controlReading:e.target.value}})} placeholder="e.g. 8.5"/>
+            </FRow>
+          </FRow2>
+          <label style={lbl}>Readings</label>
+          <div style={{ fontSize:11, color:C.txt2, marginBottom:8, background:'#F8FFFE', border:`1px solid ${C.teal}`, borderRadius:6, padding:'6px 10px' }}>
+            Scale: Normal &lt;15% · Elevated 15–20% · High 20–25% · Very High &gt;25% WME<br/>
+            <span style={{color:C.amber}}>Normal readings shown in app but excluded from PDF report (Audit 2 requirement)</span>
+          </div>
+          {(cur.moisture.readings||[]).map((r,i) => {
+            const v = parseFloat(r.value);
+            const ctrl = parseFloat(cur.moisture.controlReading)||0;
+            const diff = isNaN(v)?null:v-ctrl;
+            // Classification: both absolute and relative to control
+            const rating = isNaN(v)?null:
+              v<15?{l:'Normal',c:C.done,include:false}:
+              v<20?{l:'Elevated',c:C.amber,include:true}:
+              v<25?{l:'High',c:C.danger,include:true}:
+              {l:'Very High',c:'#9B0000',include:true};
+            return (
+              <div key={i} style={{ background:C.bg, borderRadius:8, padding:10, marginBottom:8, border:`1.5px solid ${rating?.c||C.border}`, opacity:rating&&!rating.include?0.7:1 }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                    <span style={{ fontFamily:'monospace', fontSize:11, fontWeight:700, background:'#F1F4F8', padding:'2px 6px', borderRadius:4 }}>M-{String(i+1).padStart(2,'0')}</span>
+                    {rating && <span style={{ fontSize:11, fontWeight:700, color:rating.c }}>{rating.l} — {r.value}% WME{diff!==null?` (${diff>0?'+':''}${diff.toFixed(1)} vs ctrl)`:''}</span>}
+                    {rating && !rating.include && <span style={{ fontSize:10, color:C.txt2 }}>— excluded from PDF</span>}
+                  </div>
+                  <button onClick={()=>{const rds=[...cur.moisture.readings];rds.splice(i,1);saveInspection({...cur,moisture:{...cur.moisture,readings:rds}});}} style={{ background:'none',border:'none',color:C.danger,cursor:'pointer',fontSize:14 }}>✕</button>
+                </div>
+                <input style={{...inp,marginBottom:6}} placeholder="Location — e.g. Bathroom 1, shower wall, 300mm above floor" value={r.location||''} onChange={e=>{const rds=[...cur.moisture.readings];rds[i]={...rds[i],location:e.target.value};saveInspection({...cur,moisture:{...cur.moisture,readings:rds}});}}/>
+                <FRow2>
+                  <div>
+                    <label style={lbl}>Reading (% WME)</label>
+                    <input style={inp} type="number" step="0.1" placeholder="e.g. 18.5" value={r.value||''} onChange={e=>{const rds=[...cur.moisture.readings];rds[i]={...rds[i],value:e.target.value};saveInspection({...cur,moisture:{...cur.moisture,readings:rds}});}}/>
+                  </div>
+                  <div>
+                    <label style={lbl}>Substrate</label>
+                    <select style={inp} value={r.substrate||''} onChange={e=>{const rds=[...cur.moisture.readings];rds[i]={...rds[i],substrate:e.target.value};saveInspection({...cur,moisture:{...cur.moisture,readings:rds}});}}>
+                      <option value="">Select</option>
+                      {['Timber framing','GIB / plasterboard','Painted GIB','Fibre cement','Concrete','Brick','Tile','Other'].map(o=><option key={o}>{o}</option>)}
+                    </select>
+                  </div>
+                </FRow2>
+                <input style={inp} placeholder="Comment — e.g. Consistent with concealed moisture at window junction" value={r.comment||''} onChange={e=>{const rds=[...cur.moisture.readings];rds[i]={...rds[i],comment:e.target.value};saveInspection({...cur,moisture:{...cur.moisture,readings:rds}});}}/>
+              </div>
+            );
+          })}
+          <button onClick={()=>saveInspection({...cur,moisture:{...cur.moisture,readings:[...(cur.moisture.readings||[]),{location:'',value:'',comment:''}]}})}
+            style={{ width:'100%', padding:10, border:`1.5px dashed ${C.teal}`, borderRadius:8, background:'transparent', color:C.teal, fontSize:13, fontWeight:600, cursor:'pointer' }}>
+            + Add Moisture Reading
+          </button>
+        </Card>
+
+        {/* Executive Summary — assembled from recorded entries */}
+        <Card style={{ border:`1px solid ${C.teal}` }}>
+          <SecTitle>Executive Summary</SecTitle>
+          <div style={{ fontSize:11, color:C.txt2, marginBottom:10, lineHeight:1.5 }}>
+            Assembled from recorded entries. Significant Defects only, per BOINZ requirements. Edit freely before generating the report.
+          </div>
+          <textarea
+            key={`exec-${cur.id}-${(cur.execSummary||'').length}`}
+            style={{ ...inp, minHeight:200, resize:'vertical', fontSize:13, lineHeight:1.6 }}
+            defaultValue={cur.execSummary||''}
+            onBlur={e=>saveInspection({...cur, execSummary:e.target.value})}
+            placeholder="Tap Build below to assemble from your recorded entries, or write directly."/>
+        </Card>
+        <BtnTeal
+          onClick={()=>{
+            if (cur.execSummary && !confirm('Rebuild will replace the current Executive Summary, including any edits you have made. Continue?')) return;
+            saveInspection({ ...cur, execSummary: buildExecSummary(cur) });
+            showToast(cur.execSummary ? 'Executive Summary rebuilt' : 'Executive Summary built');
+          }}
+          style={{marginBottom:8}}>
+          {cur.execSummary?'↻ Rebuild':'📝 Build'} Executive Summary
+        </BtnTeal>
+
+        {/* Inspector Notes */}
+        <Card>
+          <SecTitle>Inspector Notes</SecTitle>
+          <textarea style={{...inp,minHeight:100,resize:'none'}} placeholder="Additional notes for the report…" value={cur.notes||''} onChange={e=>saveInspection({...cur,notes:e.target.value})}/>
+        </Card>
+
+        <BtnPrimary onClick={generateWord} disabled={wordGenerating} style={{marginBottom:8}}>
+          {wordGenerating ? '⏳ Generating Word document…' : `📄 Generate Word Report${errors.length>0?` (${errors.length} warning${errors.length>1?'s':''})`:''}`}
+        </BtnPrimary>
+        <BtnSecondary onClick={()=>setPage('checklist')}>← Back to Checklist</BtnSecondary>
+      </Layout>
+    );
+  }
+
+  // Photo modal
+  if (photoMod && cur) {
+    const isCat = !!photoMod.catId;
+    const df = isCat ? null : (cur.items[photoMod.itemId]?.defects || []).find(x => x.id === photoMod.defectId);
+    const photoRef = isCat
+      ? cur.catPhotos?.[photoMod.catId]?.photos?.[photoMod.idx]
+      : df?.photos?.[photoMod.idx];
+    return (
+      <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.93)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column' }}>
+        <button onClick={()=>setPhotoMod(null)} style={{ position:'absolute', top:16, right:16, background:C.white, border:'none', color:C.txt, borderRadius:'50%', width:36, height:36, fontSize:18, cursor:'pointer' }}>✕</button>
+        {photoRef && <PhotoThumb photoRef={photoRef} onClick={()=>{}}/>}
+        <div style={{ color:'#fff', fontSize:12, marginTop:10 }}>{photoRef?.photoLabel || `Photo ${photoRef?.num}`} · {photoRef?.saveStatus==='ok'?'✅ Saved':photoRef?.saveStatus==='partial'?'⚠️ Partial':'🔴 Failed'}</div>
+        <input style={{...inp, width:260, marginTop:10, textAlign:'center'}} placeholder="Caption (required for report)" defaultValue={photoRef?.caption||''}
+          onBlur={e => {
+            if (isCat) { updCatPhoto(photoMod.catId, photoMod.idx, { caption: e.target.value }); return; }
+            const photos = df.photos.map((p, n) => n === photoMod.idx ? { ...p, caption: e.target.value } : p);
+            updDefect(photoMod.itemId, photoMod.defectId, { photos });
+          }}/>
+        <button onClick={()=>isCat ? deleteCatPhoto(photoMod.catId, photoMod.idx) : deletePhoto(photoMod.itemId, photoMod.defectId, photoMod.idx)}
+          style={{ marginTop:12, background:C.danger, border:'none', color:'#fff', borderRadius:8, padding:'10px 24px', fontSize:14, cursor:'pointer' }}>
+          🗑 Delete Photo
+        </button>
+      </div>
+    );
+  }
+
+  return null;
+}
