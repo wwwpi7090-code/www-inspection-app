@@ -199,7 +199,7 @@ async function checkStorageQuota() {
 }
 
 // ─── CONSTANTS ───────────────────────────────────────────────
-const APP_VERSION = 'v3.7.1';
+const APP_VERSION = 'v3.8';
 const APP_DATE = '2026-09-22'; // Update this on each release
 const APP_VER_DISPLAY = `${APP_VERSION} · ${APP_DATE}`;
 
@@ -254,67 +254,575 @@ const calcWTRisk = factors => {
   return h >= 3 ? 'HIGH' : h >= 1 ? 'MEDIUM' : 'LOW';
 };
 
+// ─── BOINZ FIELD CHECKLIST ────────────────────────────────────
+// Transcribed from the BOINZ site inspection checklist so the app replaces
+// the printed sheet. Each item carries a `guide`:
+//   'text'                 → a check the inspector ticks when looked at
+//   ['Label', [opts...]]   → a choice; tap the options that apply (recorded)
+//   { i: 'text' }          → reference note only
+// A ticked check means "looked at", not "no problem". Defects are recorded
+// separately with ⚑+.
+//
+// kind 'fixed' → one per property. kind 'space' → the inspector adds rooms
+// or structures on site (Living room, Basement room, Sleepout…), each of which
+// receives the same item list.
 const CATS = [
-  { id:'site', label:'1. Site', icon:'🏞️', items:[
-    {id:'site_orient',l:'Orientation & Site Exposure'},{id:'site_contour',l:'Contour & Vegetation'},
-    {id:'site_ret',l:'Retaining Walls'},{id:'site_paths',l:'Paths, Steps & Handrails'},
-    {id:'site_drive',l:'Driveway'},{id:'site_fence',l:'Fencing & Gates'},{id:'site_drain',l:'Surface Water Control'},
+  { id:'site', kind:'fixed', label:'1. Site', icon:'🏞️', items:[
+    { id:'site_orient', l:'Orientation of Living Space', guide:[
+      ['Primary living areas face', ['North','East','West','South']],
+      'Beneficial solar gain?', 'Exposure to prevailing wind?' ]},
+    { id:'site_exposure', l:'Site Exposure', guide:[
+      ['Exposure', ['Sheltered','Exposed','Coastal','High wind zone']],
+      'Evidence of weathering or accelerated deterioration?' ]},
+    { id:'site_contour', l:'Site Contour', guide:[
+      ['Contour', ['Flat','Sloping','Steep']],
+      'Level changes near dwelling', 'Earthworks or cuts / fills' ]},
+    { id:'site_veg', l:'Vegetation', guide:[
+      'Trees/shrubs near cladding or roof', 'Roots impacting foundation or paths', 'Overhanging branches' ]},
+    { id:'site_ret', l:'Retaining Walls (if present)', guide:[
+      ['Material', ['Timber','Block','Concrete','Other']],
+      'Structural condition – leaning / bowing / cracking',
+      'Drainage weep holes or signs of moisture damage' ]},
+    { id:'site_paths', l:'Paths, Steps, Handrails & Driveways', guide:[
+      ['Material', ['Concrete','Timber','Pavers','Asphalt']],
+      'Surface condition – cracking / settlement', 'Drainage – slope away from building?',
+      'Safety of use – handrails, slip hazards, lighting' ]},
+    { id:'site_fence', l:'Fencing', guide:[
+      ['Material', ['Timber','Metal','PVC','Wire']],
+      'Approximate height', 'Stability / damage / leaning',
+      { i:'2.0 m is the maximum height without consent under most district plans. Over 1.8 m is considered tall and may affect sunlight, views or neighbours.' } ]},
+    { id:'site_drain', l:'Surface Water Control', guide:[
+      'Signs of ponding water', 'Ground slope directing water toward the house?',
+      'Downpipe discharge points', 'Natural drainage paths visible' ]},
   ]},
-  { id:'sub', label:'2. Subfloor', icon:'🔧', items:[
-    {id:'sub_access',l:'Access & Foundation Type'},{id:'sub_ground',l:'Ground Condition & Vapour Barrier'},
-    {id:'sub_vent',l:'Ventilation & Drainage'},{id:'sub_frame',l:'Timber Framing — Ground Clearance'},
-    {id:'sub_insul',l:'Underfloor Insulation'},{id:'sub_services',l:'Subfloor Services (Plumbing/Electrical)'},
-    {id:'sub_pest',l:'Pest, Borer & Rot'},{id:'sub_debris',l:'Debris & Stored Materials'},
+
+  { id:'sub', kind:'fixed', label:'2. Subfloor', icon:'🔧', items:[
+    { id:'sub_access', l:'Location of Access Point', guide:[
+      'Hatch or access location identified', 'Obstructions at entry?' ]},
+    { id:'sub_accessibility', l:'Accessibility', guide:[
+      'Height adequate (>400mm recommended)?',
+      ['Access', ['Full','Partial','Restricted']], 'Safe entry possible?' ]},
+    { id:'sub_found', l:'Foundation Type and Condition', guide:[
+      ['Type', ['Timber piles','Concrete piles','Perimeter wall','Slab']],
+      'Structural integrity / movement / damage' ]},
+    { id:'sub_fwalls', l:'Foundation Walls', guide:[
+      'Cracks / leaks / bowing', 'Moisture stains or moss growth' ]},
+    { id:'sub_ground', l:'Ground Condition', guide:[
+      ['Ground', ['Damp','Dry','Compacted','Loose']], 'Water ponding or visible moisture' ]},
+    { id:'sub_vb', l:'Ground Vapour Barrier', guide:[
+      ['Vapour barrier', ['Present','Absent']], 'Coverage and condition' ]},
+    { id:'sub_drain', l:'Drainage', guide:[
+      'Water flow visible?', 'Drain pipes or soakage systems under the subfloor?' ]},
+    { id:'sub_vent', l:'Adequacy of Ventilation', guide:[
+      'Number and placement of vents', 'Obstruction by vegetation or debris' ]},
+    { id:'sub_piles', l:'Pile Type, Instability and Condition', guide:[
+      ['Material', ['Timber','Concrete','Other']], 'Signs of settlement, lean, decay' ]},
+    { id:'sub_pilecon', l:'Pile to Bearer Connections', guide:[
+      'Fixing method visible?', 'Secure / corroded / displaced' ]},
+    { id:'sub_alter', l:'Obvious Structural Alterations', guide:[
+      'Additional posts / temporary props', 'Modifications without proper support' ]},
+    { id:'sub_frame', l:'Ground Clearance of Timber Framing', guide:[
+      'Meets clearance minimums (NZS 3604)?', 'Contact with soil?' ]},
+    { id:'sub_floortype', l:'Flooring Type', guide:[
+      ['Flooring', ['Timber','Particle board','Concrete slab']], 'Movement / rot / deflection' ]},
+    { id:'sub_bracing', l:'Timber Framing and Bracing', guide:[
+      'Joists / bearers – decay or borer', 'Cross bracing secure?' ]},
+    { id:'sub_insul', l:'Insulation', guide:[
+      ['Type', ['Blanket','Rigid','None']], 'Approx. thickness, coverage & condition' ]},
+    { id:'sub_plumb', l:'Plumbing', guide:[
+      ['Pipe materials', ['Copper','PVC','Galv','PEX']], 'Leaks present?', 'Adequate support / sagging?' ]},
+    { id:'sub_elec', l:'Electrical', guide:[
+      'Wiring visible?', ['Type', ['TPS','VIR','Conduit']], 'Properly supported and protected?' ]},
+    { id:'sub_pest', l:'Insect and Pest Infestation', guide:[
+      'Borer holes or dust', 'Rodent droppings / nests', 'Feral animals or access evidence' ]},
+    { id:'sub_rot', l:'Rotting Timbers', guide:[
+      'Bearers / joists / pile heads', 'Moisture staining or softness' ]},
+    { id:'sub_debris', l:'Debris', guide:[
+      'Stored timber, rubbish, insulation scraps', 'Fire hazard / pest risk' ]},
   ]},
-  { id:'ext', label:'3. Exterior', icon:'🏠', items:[
-    {id:'ext_clad',l:'Cladding System & Condition'},{id:'ext_clearance',l:'Ground & Deck Clearances'},
-    {id:'ext_sealant',l:'Sealants & Penetrations'},{id:'ext_flash',l:'Head Flashings & Wall Flashings'},
-    {id:'ext_win',l:'Windows & Glazing'},{id:'ext_door',l:'Exterior Doors'},
-    {id:'ext_deck',l:'Decks & Balconies'},{id:'ext_moist',l:'Exterior Moisture Readings'},
+
+  { id:'ext', kind:'fixed', label:'3. Exterior', icon:'🏠', items:[
+    { id:'ext_const', l:'Construction Type', guide:[
+      ['Construction', ['Timber','Masonry','Lightweight concrete','Steel frame','Other']] ]},
+    { id:'ext_clad', l:'Cladding Surface Finish', guide:[
+      ['Weathertightness risk', ['Monolithic','Direct fixed','Cavity']],
+      'Ground clearance (soil, paved surface)', 'Wall penetrations (pipes, taps, vents)',
+      'Presence of cavity system', 'Physical damage: cracks, holes, dents',
+      'Flashings: material type & alignment', 'Cleanliness of flashings and facings',
+      'Facings & trim: rot, splitting', 'Visible fixings and soakers',
+      'Control joints and sheet layout', 'Cracking / corrosion / movement',
+      'Surface coating: delaminating, erosion, veneer checking',
+      'Mortar erosion or loose bricks', 'Vent holes / weep holes present',
+      'Differential movement cracking', 'Dampness / moisture signs',
+      'Sealant condition around joints' ]},
+    { id:'ext_chim', l:'Chimney (if present)', guide:[
+      ['Material', ['Brick','Metal','Rendered']], 'Flashings correctly installed?',
+      'Mortar erosion / vertical alignment', 'Flue clearance from combustible material',
+      'Chimney support – visible and adequate?' ]},
+    { id:'ext_stairs', l:'Exterior Stairs', guide:[
+      ['Material', ['Concrete','Timber','Steel']],
+      ['Configuration', ['Open','Enclosed','External','Internal']],
+      'Handrails and balustrades secure?', 'Slip hazard / trip hazard',
+      'Fit for purpose and in sound condition' ]},
+    { id:'ext_deck', l:'Balconies, Verandas, Patios, Decks, Pergolas', guide:[
+      ['Structure', ['Cantilevered','Post-supported']], 'Location & material type',
+      'Flashings at junctions with cladding', 'Bracing / substructure condition',
+      'Connections and fixings – corrosion or looseness', 'Balustrades – height, security, gaps',
+      'Safety from falling (compliant)?', 'Door threshold: weatherproof and level',
+      'Clearance from cladding elements', 'Drainage & fall (slope away from house)',
+      'Waterproof membrane condition (if applicable)',
+      { i:'Record each balcony or deck in detail under Balconies / Verandas / Patios.' } ]},
+    { id:'ext_win', l:'Windows', guide:[
+      ['Frame', ['Timber','Aluminium','uPVC']],
+      'Glass type (single/double glazing), any broken glass?',
+      'Sash & door panel condition and operation', 'Hinges, latches, restrictors – function',
+      'Hardware and fittings condition', 'Security locks present',
+      'Passive ventilation (trickle vents, openers)', 'Facings and trim',
+      'Flashings visible and correctly installed?' ]},
   ]},
-  { id:'roof', label:'4. Roof', icon:'🏗️', items:[
-    {id:'roof_cov',l:'Roof Covering & Pitch'},{id:'roof_gut',l:'Gutters & Downpipes'},
-    {id:'roof_flash',l:'Flashings & Ridge Cap'},{id:'roof_sky',l:'Skylights & Penetrations'},
-    {id:'roof_chim',l:'Chimney / Flue'},{id:'roof_access',l:'Roof Access / Limitations'},
+
+  { id:'roof', kind:'fixed', label:'4. Roof', icon:'🏗️', items:[
+    { id:'roof_cov', l:'Roof Covering – Material Type', guide:[
+      ['Material', ['Corrugated iron','Metal tiles','Asphalt shingles','Membrane','Clay tiles','Other']],
+      ['Roof pitch', ['Low','Medium','Steep']],
+      'Surface damage: cracks, corrosion, lifting',
+      'Roof penetrations: flues, skylights, vents – flashing condition',
+      'Junctions: roof-to-wall – sealed and flashed?', 'Lapping – overlap direction and adequacy',
+      'Fixings – visible corrosion, looseness, missing screws',
+      'Attachments – satellite, solar panel mountings', 'Sealants – cracking, failure or missing',
+      'Sagging or undulations visible?', 'Inadequate or temporary repairs present?' ]},
+    { id:'roof_gut', l:'Roof Water Collection – Spouting / Gutters', guide:[
+      ['Type', ['Standard spouting','Box gutter','Internal gutter']],
+      ['Material', ['PVC','Metal','Other']],
+      'Correct positioning / slope to outlet', 'Fixings – secure, spaced evenly',
+      'Obstructions – leaves, debris, moss', 'Visible damage – cracks, deformation',
+      'Corrosion – rust spots, flaking', 'Leaking during rain or residual signs',
+      'Depth of overflow protection', 'Rainwater heads / droppers – condition, flow' ]},
+    { id:'roof_dp', l:'Downpipes', guide:[
+      ['Material', ['PVC','Metal','Painted']], 'Damage – dents, cracks, warping',
+      'Corrosion – particularly at base', 'Leaks – joints, elbows, connections',
+      'Fixings – secure to wall, loose brackets',
+      ['Point of discharge', ['Stormwater','Soakage','Tank']] ]},
+    { id:'roof_eaves', l:'Eaves, Fascia and Soffits', guide:[
+      ['Material', ['Timber','Fibre cement','uPVC','Aluminium']],
+      'Approximate width (mm or visually noted)', 'Paint condition / flaking / exposed edges',
+      'Physical damage – rot, impact, separation', 'Deterioration – moisture stains, sagging',
+      'Reverse-sloping soffits – water runoff risk' ]},
   ]},
-  { id:'roofspace', label:'5. Roof Space', icon:'🔦', items:[
-    {id:'rs_access',l:'Access & Accessibility'},{id:'rs_struct',l:'Roof Structure'},
-    {id:'rs_insul',l:'Insulation'},{id:'rs_vent',l:'Ventilation'},{id:'rs_pest',l:'Pest & Moisture'},
+
+  { id:'roofspace', kind:'fixed', label:'5. Roof Space', icon:'🔦', items:[
+    { id:'rs_access', l:'Accessibility', guide:[
+      'Hatch location and size', 'Safe access (ladder, clearance)',
+      ['Access', ['Full','Partial','Restricted']] ]},
+    { id:'rs_cladund', l:'Roof Cladding (underside view)', guide:[
+      'Visible from cavity?', 'Signs of leaks or rust', 'Skylight, penetration flashings' ]},
+    { id:'rs_insul', l:'Thermal Insulation', guide:[
+      ['Type', ['Blanket','Batts','Loose fill','None']],
+      'Clearance around downlights (IC rating?)', 'Approximate thickness (mm)',
+      ['Coverage', ['Full','Partial','Displaced','Gaps']] ]},
+    { id:'rs_sark', l:'Sarking', guide:[
+      'Presence and type (e.g. foil-backed board)', 'Delamination, moisture damage, sagging' ]},
+    { id:'rs_party', l:'Party Walls and Fireproofing (if applicable)', guide:[
+      'Fire-rated barrier present?', 'Firestop penetration sealants', 'Shared wall integrity' ]},
+    { id:'rs_underlay', l:'Roof Underlay & Support', guide:[
+      'Building paper / synthetic underlay presence', 'Sagging / tearing / unsupported areas',
+      'Properly lapped at junctions' ]},
+    { id:'rs_struct', l:'Roof Framing Construction and Connections', guide:[
+      'Rafters, purlins, trusses – visible sag / deflection',
+      'Nail plates, brackets – corrosion or separation', 'Alignment and load paths' ]},
+    { id:'rs_ceil', l:'Ceiling Construction', guide:[
+      'Joists – condition, size, spacing', 'Fixings and sagging', 'Signs of ceiling sag or cracking below' ]},
+    { id:'rs_alter', l:'Obvious Structural Alterations', guide:[
+      'Added framing, removed supports', 'Cut trusses or bracing', 'Temporary props or reinforcements' ]},
+    { id:'rs_pest', l:'Insect and Pest Infestation', guide:[
+      'Borer holes / dust', 'Rodent droppings / nests', 'Bird access or other feral animals' ]},
+    { id:'rs_rot', l:'Rotting Timbers', guide:[
+      'Trusses, battens, plates', 'Water staining or softness' ]},
+    { id:'rs_disch', l:'Discharges into Roof Space', guide:[
+      'Bathroom or kitchen exhausts incorrectly vented', 'Dryer hoses or ducting leaks',
+      'Signs of condensation or mould' ]},
+    { id:'rs_plumb', l:'Plumbing (visible)', guide:[
+      ['Material', ['Copper','PEX','PVC','Galv']], 'Leaks, unsupported runs, joints integrity' ]},
+    { id:'rs_elec', l:'Electrical (visible)', guide:[
+      ['Wiring', ['TPS','VIR','Conduit']], 'Unsupported or exposed wiring',
+      'Junction boxes – secure and closed' ]},
+    { id:'rs_tile', l:'Tile Fixings (if tiled roof)', guide:[
+      'Nails or clips visible?', 'Loose or displaced tiles from inside?',
+      'Under-tile visibility (if underlay gaps)' ]},
   ]},
-  { id:'int', label:'6. Interior', icon:'🛋️', items:[
-    {id:'int_ceil',l:'Ceilings'},{id:'int_wall',l:'Interior Walls'},
-    {id:'int_floor',l:'Floor Coverings'},{id:'int_door',l:'Interior Doors'},{id:'int_stair',l:'Stairs & Handrails'},
-    {id:'int_storage',l:'Built-in Storage / Wardrobes'},
+
+  { id:'int', kind:'space', label:'6. Interior', icon:'🛋️', spaceNoun:'room',
+    defaults:['Living room','Master bedroom'],
+    suggest:['Living room','Lounge','Dining','Master bedroom','Bedroom 2','Bedroom 3','Bedroom 4','Study','Foyer','Hallway – ground','Hallway – first floor','Stairs','Basement room'],
+    items:[
+    { id:'ceil', l:'Ceilings', guide:[
+      ['Material', ['Plasterboard','Timber','Tile','Other']],
+      'Visible defects: sagging, cracking, patching', 'Stains (moisture-related?)',
+      'Mould presence or ventilation issues' ]},
+    { id:'wall', l:'Walls', guide:[
+      'Damage: cracks / holes / scuff marks', 'Joint defects or separation', 'Paint condition',
+      'Mould or discolouration' ]},
+    { id:'floor', l:'Floors', guide:[
+      ['Material', ['Timber','Laminate','Tile','Carpet','Vinyl']],
+      'Defects: cupping, lifting, unevenness', 'Squeaking or bounce', 'Trip hazards or level changes' ]},
+    { id:'door', l:'Doors', guide:[
+      ['Type', ['Hollow-core','Timber','Fire-rated','Sliding','Bi-fold']],
+      'Function: opens/closes smoothly, alignment', 'Doorstops present?',
+      'Hardware: handles, latches, locks – condition', 'Defects: damage, misalignment, sticking' ]},
+    { id:'elec', l:'Electrical', guide:[
+      'Lights and switches – operation and location', 'Power outlets – visible damage / secure fit',
+      'Adequate number per room?', 'Visible surface wiring or extension misuse?' ]},
+    { id:'heat', l:'Heating', guide:[
+      ['Type', ['Heat pump','Panel heater','Fireplace','Gas','Other','None']],
+      'Location and adequacy', 'Secure and compliant positioning', 'Obstructions or clearance violations?' ]},
+    { id:'storage', l:'Storage', guide:[
+      'Wardrobes / cupboards – doors, shelves, function', 'Linen storage – ventilation / musty odour?',
+      'Attic or ceiling storage access' ]},
+    { id:'stair', l:'Stairs (internal)', guide:[
+      'Tread and riser consistency', 'Handrails present and secure', 'Slippery or worn surfaces',
+      'Fixings – loose or corroded' ]},
   ]},
-  { id:'kitchen', label:'7. Kitchen', icon:'🍳', items:[
-    {id:'kit_fit',l:'Fittings & Fixtures'},{id:'kit_plumb',l:'Plumbing (visible)'},
-    {id:'kit_bench',l:'Benchtops & Cabinetry'},{id:'kit_vent',l:'Ventilation & Rangehood'},
+
+  { id:'kitchen', kind:'space', label:'7. Kitchen', icon:'🍳', spaceNoun:'kitchen',
+    defaults:['Kitchen'], suggest:['Kitchen','Kitchenette','Scullery','Granny flat kitchen'],
+    items:[
+    { id:'bench', l:'Bench Tops', guide:[
+      ['Material', ['Laminate','Stone','Stainless','Timber','Other']],
+      'Surface defects: delamination, cracks, lifting, stains', 'Joints – gaps or separation' ]},
+    { id:'cab', l:'Cabinetry', guide:[
+      ['Material', ['MDF','Timber','Melteca','Plywood','Other']],
+      'Doors and drawers – function & alignment', 'Defects: water swelling, hinges, chipped edges' ]},
+    { id:'sink', l:'Sink & Taps', guide:[
+      ['Sink material', ['Stainless','Composite','Ceramic']], 'Tap operation: flow, leaks, drips',
+      'Trap & waste pipe condition', 'Any signs of leaking beneath?', 'Water hammer or vibration on shut-off?' ]},
+    { id:'wdu', l:'Waste Disposal Unit (if installed)', guide:[
+      'Operational noise or blockage', 'Signs of leaks or loose fittings' ]},
+    { id:'tiles', l:'Tiles (walls or floor)', guide:[
+      'Loose, cracked, missing tiles', 'Grouting or sealant condition', 'Slip hazard?' ]},
+    { id:'extract', l:'Air Extract System', guide:[
+      ['Type', ['Mechanical','Passive vent']], 'Filter present and clean?',
+      ['Point of discharge', ['Exterior','Ceiling cavity']] ]},
+    { id:'win', l:'Windows (including door panels)', guide:[
+      ['Material', ['Aluminium','Timber','uPVC']], ['Glass', ['Single','Double glazing']],
+      'Any broken or cracked glass?', 'Sash & panel condition: opens/closes properly',
+      'Fittings & hardware: secure and functional', 'Passive ventilation: trickle vents or gaps?',
+      'Facings, trims, flashings – condition' ]},
+    { id:'storage', l:'Storage', guide:[
+      'General cupboards & drawers – secure, clean', 'Hot water cupboard – signs of leaks?',
+      'Linen or tall pantry cupboard – ventilation?', 'Additional storeroom or scullery (if applicable)' ]},
+    { id:'stair', l:'Stairs (if present within or adjoining)', guide:[
+      ['Material', ['Timber','Concrete','Other']], ['Type', ['Open','Enclosed','Spiral','Ladder']],
+      'Handrails and balustrades – present and secure', 'Fit for purpose – safe access, compliant spacing' ]},
   ]},
-  { id:'bath', label:'8. Bathrooms', icon:'🚿', items:[
-    {id:'bath_1',l:'Bathroom 1 — Wet Areas & Sealing'},{id:'bath_2',l:'Bathroom 2 — Wet Areas & Sealing'},
-    {id:'bath_toilet',l:'Separate Toilet'},{id:'bath_vent',l:'Bathroom Ventilation'},
-    {id:'bath_moist1',l:'Bathroom 1 Moisture Readings'},{id:'bath_moist2',l:'Bathroom 2 Moisture Readings'},
+
+  { id:'bath', kind:'space', label:'8. Bathroom', icon:'🚿', spaceNoun:'bathroom',
+    defaults:['Bathroom 1'], suggest:['Bathroom 1','Bathroom 2','Ensuite','Separate toilet','Powder room'],
+    items:[
+    { id:'floor', l:'Floor', guide:[
+      ['Material', ['Tile','Vinyl','Laminate','Timber','Other']], 'Floor waste present and location',
+      'Adequacy of fall to waste', 'Ponding or slip risk' ]},
+    { id:'toilet', l:'Toilet', guide:[
+      ['Type', ['Close-coupled','Concealed','Wall-hung']], 'Dual flush present?',
+      'Cracking / leaking / staining', 'Operation of flush mechanism', 'Bowl and seat stability' ]},
+    { id:'tiles', l:'Wall and Floor Tiles', guide:[
+      'Loose, cracked, or missing tiles', 'Grout or sealant deterioration', 'Water ingress risk at junctions' ]},
+    { id:'bath', l:'Bath', guide:[
+      ['Material', ['Acrylic','Enamel','Steel','Fiberglass','Other']], 'Visible damage: cracks, staining',
+      'Leaks from outlet or pipework', 'Tap and waste operation', 'Water hammer observed?',
+      'Wall lining integrity at junctions' ]},
+    { id:'shower', l:'Shower', guide:[
+      'Shower screen: material, alignment, secure?', 'Wall lining – cracking, delamination, mould',
+      'Tap and waste function', 'Adequate water flow', 'Any leaking or pooling observed',
+      'Water hammer on shut-off?' ]},
+    { id:'vanity', l:'Vanity', guide:[
+      ['Material', ['MDF','Timber','Acrylic','Stone']], 'Damage or delamination',
+      'Tap and waste operation', 'Water hammer?', 'Cupboards or drawers function',
+      'Adequately sealed at wall junction?' ]},
+    { id:'vent', l:'Ventilation', guide:[
+      ['Type', ['Mechanical','Passive']], 'Function test (if accessible)',
+      ['Point of discharge', ['Exterior','Ceiling cavity']] ]},
+    { id:'special', l:'Special Features', guide:[
+      'Heated towel rail – operational / securely mounted', 'Heating source present? (e.g. wall panel)',
+      'Shaver socket or vanity power outlet – condition and cover' ]},
+    { id:'win', l:'Windows', guide:[
+      ['Frame', ['Timber','Aluminium','uPVC']], ['Glass', ['Single','Double glazed','Frosted']],
+      'Any broken or cracked panes?', 'Operation and alignment of sashes/panels', 'Locks and fittings',
+      'Passive ventilation present?', 'Facings, trims and flashings – visible defects' ]},
   ]},
-  { id:'laundry', label:'9. Laundry', icon:'🧺', items:[
-    {id:'lau_fit',l:'Fittings & Drainage'},{id:'lau_plumb',l:'Plumbing (visible)'},{id:'lau_vent',l:'Ventilation'},
+
+  { id:'laundry', kind:'space', label:'9. Laundry', icon:'🧺', spaceNoun:'laundry',
+    defaults:['Laundry'], suggest:['Laundry','Laundry – garage','Laundry – bathroom'],
+    items:[
+    { id:'loc', l:'Location', guide:[
+      ['Location', ['Separate room','In bathroom','In garage','Hallway','Other']],
+      'Accessibility and general description', 'Adequate working space?' ]},
+    { id:'floor', l:'Floor', guide:[
+      ['Material', ['Vinyl','Tile','Concrete','Timber','Laminate']],
+      'Surface condition – cracks, damage, softness', 'Floor waste present and functioning?' ]},
+    { id:'tub', l:'Tub & Cabinetry', guide:[
+      ['Tub material', ['Stainless','Acrylic','Other']],
+      ['Cabinet material', ['Melteca','Timber','MDF','Other']],
+      'Tap operation – flow, leaking, water hammer', 'Waste pipe integrity – leaks, blockages',
+      'Doors/drawers – alignment and function', 'Washing machine standpipe present?',
+      'Adequately sealed at the junction with the wall?' ]},
+    { id:'tiles', l:'Tiles', guide:[
+      'Cracks / loose tiles on floor or wall', 'Grouting / sealant – intact and clean?',
+      'Waterproofing issues or visible damage' ]},
+    { id:'vent', l:'Ventilation', guide:[
+      ['Type', ['Passive (window/vent)','Mechanical (fan)']],
+      ['Point of discharge', ['Exterior','Ceiling cavity']],
+      'Signs of inadequate ventilation – condensation, mould' ]},
+    { id:'win', l:'Windows (if present)', guide:[
+      ['Frame', ['Aluminium','Timber','uPVC']], ['Glass', ['Single','Double glazed','Frosted']],
+      'Cracked or broken glass?', 'Operation – opens/closes freely', 'Hardware: secure, functional?',
+      'Passive ventilation present (trickle vents etc)?', 'Facings, trims, and flashings – condition' ]},
   ]},
-  { id:'garage', label:'10. Garage', icon:'🚗', items:[
-    {id:'gar_struct',l:'Structure & Condition'},{id:'gar_door',l:'Door & Access'},{id:'gar_other',l:'Conversion / Other Use'},
+
+  { id:'garage', kind:'space', label:'10. Garages & Outbuildings', icon:'🚗', spaceNoun:'building',
+    defaults:['Garage'], suggest:['Garage','Carport','Sleepout','Shed','Studio'],
+    items:[
+    { id:'struct', l:'General Structure', guide:[
+      ['Type', ['Freestanding','Attached','Carport','Sleepout','Shed','Studio']],
+      ['Similar construction to main house', ['Yes','No']] ]},
+    { id:'found', l:'Foundations (if visible)', guide:[
+      ['Type', ['Slab','Piles','Concrete block']], 'Signs of cracking, movement or dampness?' ]},
+    { id:'subfloor', l:'Subfloor (if applicable)', guide:[
+      ['Type', ['Timber','Concrete']], 'Ventilation and moisture condition',
+      'Timber clearance and support', 'Signs of rot, borer, pests' ]},
+    { id:'floor', l:'Floors', guide:[
+      ['Material', ['Concrete','Timber','Other']], 'Visible cracks, settlement, trip hazards?',
+      'Drainage fall (towards exit)?' ]},
+    { id:'clad', l:'Cladding (exterior)', guide:[
+      ['Material', ['Timber','Fibre cement','Metal','Other']], 'Damage, rot, delamination, impact?',
+      'Flashings and weathertightness risk', 'Clearance from ground', 'Paint or coating condition' ]},
+    { id:'roof', l:'Roof', guide:[
+      ['Material', ['Iron','Tiles','Membrane','Other']], 'Penetrations, skylights, flues',
+      'Surface damage, corrosion, fixings', 'Sagging or signs of repair?' ]},
+    { id:'roofspace', l:'Roof Space (if applicable)', guide:[
+      ['Accessible', ['Yes','No']], 'Framing integrity and moisture signs',
+      'Sarking / insulation / wiring visible?', 'Signs of leaks or pests?' ]},
+    { id:'doors', l:'Doors (garage)', guide:[
+      ['Type', ['Roller','Tilt','Sectional','Barn','Manual','Auto']], 'Operation and alignment',
+      'Weather seals present?', 'Locking or security concerns?' ]},
   ]},
-  { id:'general', label:'11. General', icon:'⚡', items:[
-    {id:'gen_elec',l:'Electrical (visible)'},{id:'gen_plumb',l:'Plumbing (visible)'},
-    {id:'gen_hvac',l:'Heating & Ventilation — make/model/location'},
-    {id:'gen_hw',l:'Hot Water System'},{id:'gen_gas',l:'Gas System'},
-    {id:'gen_pest',l:'Pest — presence or absence'},{id:'gen_other',l:'Other Systems (vacuum, alarm, earthing rod)'},
+
+  { id:'balc', kind:'space', label:'11. Balconies / Verandas / Patios', icon:'🪴', spaceNoun:'balcony or deck',
+    defaults:[], suggest:['Upper balcony','Rear deck','Front veranda','Patio','Pergola'],
+    items:[
+    { id:'type', l:'Structure Type', guide:[
+      ['Structure', ['Cantilevered','Post-supported','Suspended slab','Roof-top']],
+      ['Integration', ['Integrated','Add-on']] ]},
+    { id:'loc', l:'Location', guide:[
+      ['Location', ['Upper floor','Ground floor','Side','Rear','Front']], 'Accessibility from the interior?' ]},
+    { id:'material', l:'Material Type', guide:[
+      ['Decking', ['Timber','Tile','Concrete','Composite','Other']],
+      ['Substructure', ['Timber','Steel','Concrete','Membrane']] ]},
+    { id:'flash', l:'Flashings', guide:[
+      'Present at wall junctions?', 'Correctly lapped, sealed and visible?' ]},
+    { id:'bracing', l:'Bracing', guide:[
+      'Diagonal or post bracing present?', 'Loose or corroded connections?', 'Movement observed?' ]},
+    { id:'conn', l:'Structural Connections', guide:[
+      'Fixings to the main structure – secure and corrosion-free?', 'Signs of pull-away, sagging or settlement?' ]},
+    { id:'spring', l:'Excessive Springiness', guide:[ 'Any bounce, flexing, or vibration underfoot?' ]},
+    { id:'balust', l:'Balustrades', guide:[
+      'Height meets current code?', 'Gaps between balusters within safe limits?',
+      'Securely fixed and not corroded or decayed?' ]},
+    { id:'fall', l:'Safety from Falling', guide:[
+      'Threshold drop / step hazard?', 'Protection at all open sides?' ]},
+    { id:'threshold', l:'Threshold', guide:[
+      'Level difference between interior and exterior', 'Weatherproof transition?' ]},
+    { id:'cladclear', l:'Cladding Clearance', guide:[
+      'Adequate separation from cladding material?', 'Risk of moisture bridging?' ]},
+    { id:'drain', l:'Drainage Falls & Overflow', guide:[
+      'Slope away from house?', 'Overflow protection / scuppers present?', 'Ponding or algae growth?' ]},
+    { id:'membrane', l:'Waterproof Membrane (if applicable)', guide:[
+      'Surface condition – cracks, blistering, lifting?', 'Upstands and edge terminations sealed?',
+      'Age and maintenance history?' ]},
   ]},
-  { id:'moisture', label:'12. Moisture Test', icon:'💧', items:[
-    {id:'mo_setup',l:'Meter Setup & Control Reading'},{id:'mo_ext',l:'Exterior Readings'},
-    {id:'mo_bath',l:'Bathroom Readings'},{id:'mo_other',l:'Other Location Readings'},
+
+  { id:'general', kind:'fixed', label:'12. General', icon:'⚡', items:[
+    { id:'gen_stairs', l:'Stairs (General Access)', guide:[
+      ['Location', ['Internal','External']], 'Stability and structural integrity',
+      'Handrails, balustrades – secure and compliant?', 'Slip risk, uneven treads, trip hazards' ]},
+    { id:'gen_fire', l:'Fire Warning Control', guide:[
+      'Smoke alarms: present in all required areas?',
+      ['Type', ['Battery','Hardwired','Interconnected']],
+      'Operational test (if accessible)', 'Expiry date (for 10-year units)' ]},
+    { id:'gen_heat', l:'Heating Systems', guide:[
+      ['Type', ['Heat pump','Fireplace','Gas','Panel heater']], 'Location and room coverage',
+      'Safety clearance / mounting', 'Operational condition' ]},
+    { id:'gen_vac', l:'Central Vacuum System', guide:[
+      ['Present', ['Yes','No']], 'Hose connection points and cover condition',
+      'Power unit location and access', 'Operational test (if accessible)' ]},
+    { id:'gen_vent', l:'Ventilation Systems', guide:[
+      ['Type', ['Passive','Mechanical','HRV','DVS','Extracts']],
+      'Coverage: bathroom, kitchen, laundry', 'Ducting condition and discharge points',
+      'Condensation or mould signs?' ]},
+    { id:'gen_security', l:'Security Systems', guide:[
+      'Alarm panel and sensors', 'Cameras / intercom / smart lock', 'Operational or disconnected?' ]},
+    { id:'gen_elec', l:'Electrical Services', guide:[
+      'Switchboard – location, RCD present?', 'Wiring – visible types and support',
+      'Adequacy of power outlets per room' ]},
+    { id:'gen_gas', l:'Gas Services', guide:[
+      ['Supply', ['Bottle','Mains','None']], 'Appliance points – hot water / cooktop / heater',
+      'Regulator and isolation valve location', 'Signs of corrosion or gas smell?' ]},
+    { id:'gen_water', l:'Water Services', guide:[
+      ['Main supply', ['Town','Tank','Bore']], 'Meter location and isolation valve',
+      'Visible leaks or pressure issues?' ]},
+    { id:'gen_hw', l:'Hot Water Service', guide:[
+      ['Type', ['Electric','Gas','Solar','Heat pump']], 'Cylinder age and capacity',
+      'Drip tray, PRV pipe, seismic straps' ]},
+    { id:'gen_foul', l:'Foul Water Disposal', guide:[
+      ['Type', ['Mains sewer','Septic tank','Other']], 'Smell / blockage signs / inspection points' ]},
+    { id:'gen_grey', l:'Grey Water System (if present)', guide:[
+      'Collection and treatment system visible?', 'Reuse points – irrigation / toilets?' ]},
+    { id:'gen_rain', l:'Rainwater Collection', guide:[
+      'Roof collection to tank – type and location', 'First flush diverter present?',
+      'Tank material, size and condition' ]},
+    { id:'gen_solar', l:'Solar Heating', guide:[
+      ['Panels', ['Roof-mounted','Ground-mounted']], 'Collector and storage tank condition',
+      'Pipe lagging, isolation valves' ]},
+    { id:'gen_aerial', l:'Aerial / Satellite', guide:[
+      'TV aerial or dish present?', 'Secure mounting and corrosion?' ]},
+    { id:'gen_shading', l:'Shading Systems', guide:[
+      ['Type', ['Awnings','Louvres','External blinds']], ['Operation', ['Manual','Motorised']],
+      'Structural condition and function' ]},
+    { id:'gen_telecom', l:'Telecommunications', guide:[
+      'Phone / internet / fibre panel location', 'Cabling or distribution visible?' ]},
+    { id:'gen_lift', l:'Lifts (if applicable)', guide:[
+      ['Type', ['Residential','Platform','Stairlift']], 'Operational test (if accessible)',
+      'Maintenance label or certification displayed?' ]},
   ]},
-  { id:'thermal', label:'13. Thermal Test', icon:'🌡️', items:[
-    {id:'th_setup',l:'Camera & Test Conditions'},{id:'th_findings',l:'Thermal Findings & Images'},
+
+  { id:'moisture', kind:'fixed', label:'13. Moisture Test', icon:'💧', items:[
+    { id:'mo_setup', l:'Meter Setup & Control Reading', guide:[] },
+    { id:'mo_ext', l:'Exterior Readings', guide:[] },
+    { id:'mo_bath', l:'Bathroom Readings', guide:[] },
+    { id:'mo_other', l:'Other Location Readings', guide:[] },
+  ]},
+  { id:'thermal', kind:'fixed', label:'14. Thermal Test', icon:'🌡️', items:[
+    { id:'th_setup', l:'Camera & Test Conditions', guide:[] },
+    { id:'th_findings', l:'Thermal Findings & Images', guide:[] },
   ]},
 ];
+
+// Old fixed item ids (v3.x) → where their data now lives.
+// Fixed targets are item ids; space targets are [catId, spaceName, itemId].
+const LEGACY_ITEM_MAP = {
+  site_drive:'site_paths',
+  sub_services:'sub_plumb',
+  ext_clearance:'ext_clad', ext_sealant:'ext_clad', ext_flash:'ext_clad',
+  ext_door:'ext_win', ext_moist:'mo_ext',
+  roof_flash:'roof_cov', roof_sky:'roof_cov', roof_access:'roof_cov', roof_chim:'ext_chim',
+  rs_vent:'rs_disch',
+  gen_plumb:'gen_water', gen_hvac:'gen_heat', gen_pest:'sub_pest', gen_other:'gen_vac',
+  bath_moist1:'mo_bath', bath_moist2:'mo_bath',
+  int_ceil:['int','Interior (from earlier version)','ceil'],
+  int_wall:['int','Interior (from earlier version)','wall'],
+  int_floor:['int','Interior (from earlier version)','floor'],
+  int_door:['int','Interior (from earlier version)','door'],
+  int_stair:['int','Interior (from earlier version)','stair'],
+  int_storage:['int','Interior (from earlier version)','storage'],
+  kit_fit:['kitchen','Kitchen','sink'], kit_plumb:['kitchen','Kitchen','sink'],
+  kit_bench:['kitchen','Kitchen','bench'], kit_vent:['kitchen','Kitchen','extract'],
+  bath_1:['bath','Bathroom 1','tiles'], bath_2:['bath','Bathroom 2','tiles'],
+  bath_toilet:['bath','Separate toilet','toilet'], bath_vent:['bath','Bathroom 1','vent'],
+  lau_fit:['laundry','Laundry','tub'], lau_plumb:['laundry','Laundry','tub'], lau_vent:['laundry','Laundry','vent'],
+  gar_struct:['garage','Garage','struct'], gar_door:['garage','Garage','doors'], gar_other:['garage','Garage','struct'],
+};
+
+// ─── CHECKLIST STRUCTURE HELPERS ─────────────────────────────
+// Space items are stored under a composite key: `${spaceId}__${itemId}`.
+const SPACE_SEP = '__';
+
+// Every checklist entry for a category on this inspection.
+// Fixed categories → one entry per item. Space categories → one per item per space.
+function catItems(cat, ins) {
+  if (cat.kind !== 'space') {
+    return cat.items.map(t => ({ key: t.id, tpl: t, space: null, label: t.l }));
+  }
+  return (ins?.spaces?.[cat.id] || []).flatMap(sp =>
+    cat.items.map(t => ({ key: `${sp.id}${SPACE_SEP}${t.id}`, tpl: t, space: sp,
+                          label: `${sp.name} — ${t.l}` })));
+}
+
+function allEntries(ins) {
+  return CATS.flatMap(cat => catItems(cat, ins).map(e => ({ ...e, cat })));
+}
+
+// Stable key for a guide line — survives reordering, not rewording.
+function guideKey(g) {
+  const text = Array.isArray(g) ? g[0] : (typeof g === 'string' ? g : '');
+  return text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
+}
+
+// Checkable guide lines (reference notes excluded) and how many are done.
+function guideProgress(tpl, it) {
+  const lines = (tpl?.guide || []).filter(g => typeof g === 'string' || Array.isArray(g));
+  const done = lines.filter(g => {
+    const k = guideKey(g);
+    return Array.isArray(g) ? (it?.choices?.[k] || []).length > 0 : !!it?.checks?.[k];
+  }).length;
+  return { done, total: lines.length };
+}
+
+function defaultSpaces() {
+  const out = {};
+  CATS.filter(c => c.kind === 'space').forEach(c => {
+    out[c.id] = (c.defaults || []).map(name => ({ id: gid(), name }));
+  });
+  return out;
+}
+
+function hasItemData(it) {
+  return !!it && (it.status !== ST.pending || (it.defects || []).length || (it.photos || []).length ||
+                  it.note || it.naReason);
+}
+
+function mergeItems(a, b) {
+  if (!a) return b;
+  if (!b) return a;
+  const status = (a.status === ST.done || b.status === ST.done) ? ST.done
+               : (a.status === ST.na || b.status === ST.na) ? ST.na : ST.pending;
+  return {
+    ...a, status,
+    photos: [...(a.photos || []), ...(b.photos || [])],
+    defects: [...(a.defects || []), ...(b.defects || [])],
+    note: [a.note, b.note].filter(Boolean).join('\n'),
+    naReason: [a.naReason, b.naReason].filter(Boolean).join('; '),
+    checks: { ...(a.checks || {}), ...(b.checks || {}) },
+    choices: { ...(a.choices || {}), ...(b.choices || {}) },
+  };
+}
+
+// v3.x fixed checklist → v5 BOINZ checklist with spaces.
+// Every legacy item is carried to its nearest BOINZ heading; nothing is dropped.
+function migrateLayoutV5(ins) {
+  if (ins._layoutV5) return { ins, migrated: false };
+  const spaces = defaultSpaces();
+  const items = {};
+  const fixedIds = new Set(CATS.filter(c => c.kind === 'fixed').flatMap(c => c.items.map(t => t.id)));
+
+  const spaceFor = (catId, name) => {
+    let sp = spaces[catId].find(x => x.name === name);
+    if (!sp) { sp = { id: gid(), name }; spaces[catId].push(sp); }
+    return sp;
+  };
+
+  Object.entries(ins.items || {}).forEach(([oldId, it]) => {
+    const target = fixedIds.has(oldId) ? oldId : LEGACY_ITEM_MAP[oldId];
+    if (!target) { items[oldId] = it; return; }         // unknown key: keep verbatim
+    if (typeof target === 'string') { items[target] = mergeItems(items[target], it); return; }
+    if (!hasItemData(it)) return;                         // empty legacy space item: nothing to carry
+    const [catId, name, itemId] = target;
+    const key = `${spaceFor(catId, name).id}${SPACE_SEP}${itemId}`;
+    items[key] = mergeItems(items[key], it);
+  });
+
+  return { ins: { ...ins, items, spaces, spaceNone: ins.spaceNone || {}, _layoutV5: true }, migrated: true };
+}
+
+
 
 // ─── HELPERS ─────────────────────────────────────────────────
 const gid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,6);
@@ -329,7 +837,7 @@ function blankItem() {
   // An item records that it was inspected (status, photos, note) AND any defects
   // found. The two are independent: an item can be inspected and clear, inspected
   // with defects, or not inspected at all.
-  return { status:ST.pending, photos:[], note:'', naReason:'', defects:[] };
+  return { status:ST.pending, photos:[], note:'', naReason:'', checks:{}, choices:{}, defects:[] };
 }
 
 function blankDefect() {
@@ -343,12 +851,12 @@ function blankDefect() {
 // Every defect across the inspection, in D-XX order, with its item/category context.
 function allDefects(ins) {
   const out = [];
-  CATS.forEach(cat => cat.items.forEach(item => {
-    (ins.items?.[item.id]?.defects || []).forEach(df => {
-      out.push({ ...df, itemId:item.id, item:item.l,
+  allEntries(ins).forEach(({ key, label, cat }) => {
+    (ins.items?.[key]?.defects || []).forEach(df => {
+      out.push({ ...df, itemId:key, item:label,
                  cat:cat.label, catId:cat.id, catShort:cat.label.replace(/^\d+\.\s/,'') });
     });
-  }));
+  });
   return out.sort((a,b) =>
     parseInt((a.defectRef||'D-99').replace('D-',''),10) -
     parseInt((b.defectRef||'D-99').replace('D-',''),10));
@@ -428,6 +936,19 @@ function migrateItemsToV4(ins) {
   return { items, migrated: touched };
 }
 
+// Full migration chain for any stored or imported inspection.
+function migrateAll(raw) {
+  let { ins, migrated } = migrateToV3(raw);
+  const iv4 = migrateItemsToV4(ins);
+  if (iv4.migrated || !ins._itemsV4) {
+    ins = { ...ins, items: iv4.items, _itemsV4: true };
+    migrated = migrated || iv4.migrated;
+  }
+  const v5 = migrateLayoutV5(ins);
+  if (v5.migrated) { ins = v5.ins; migrated = true; }
+  return { ins, migrated };
+}
+
 function migrateToV3(ins) {
   const gi = ins.generalInfo || {};
   if (gi.schemaVersion === 3) return { ins, migrated: false };
@@ -498,7 +1019,7 @@ function migrateToV3(ins) {
 
 function blankInspection() {
   const items = {};
-  CATS.forEach(c => c.items.forEach(i => { items[i.id] = blankItem(); }));
+  CATS.filter(c => c.kind !== 'space').forEach(c => c.items.forEach(i => { items[i.id] = blankItem(); }));
   return {
     id: gid(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
     fileNo: genFileNo(),
@@ -510,19 +1031,23 @@ function blankInspection() {
     generalInfo: blankGeneralInfo(),
     wt: { factors:{}, rating:'', context:'', invasive:'Recommended' },
     moisture: { meterMake:'Protimeter Surveymaster', meterType:'Non-invasive (capacitance)', controlLocation:'', controlReading:'', readings:[] },
-    items, catPhotos: {}, execSummary:'', notes:'',
+    items, spaces: defaultSpaces(), spaceNone: {}, _layoutV5: true, _itemsV4: true,
+    catPhotos: {}, execSummary:'', notes:'',
     saveDevicePhotos: true,  // Phase A: default ON
   };
 }
 
 function calcPct(ins) {
-  const all = CATS.flatMap(c => c.items.map(i => i.id));
-  return Math.round(all.filter(id => ins.items[id]?.status !== ST.pending).length / all.length * 100);
+  const all = allEntries(ins).map(e => e.key);
+  if (!all.length) return 0;
+  return Math.round(all.filter(k => (ins.items[k]?.status || ST.pending) !== ST.pending).length / all.length * 100);
 }
 
 function catSt(catId, ins) {
   const cat = CATS.find(c => c.id === catId);
-  const ss = cat.items.map(i => ins.items[i.id]?.status);
+  const entries = catItems(cat, ins);
+  if (!entries.length) return ins.spaceNone?.[catId] ? ST.na : ST.pending;
+  const ss = entries.map(e => ins.items[e.key]?.status || ST.pending);
   if (ss.every(s => s === ST.na)) return ST.na;
   if (ss.every(s => s !== ST.pending)) return ST.done;
   return ST.pending;
@@ -542,25 +1067,25 @@ function validateReport(ins) {
   if (!ins.insp.weather) errors.push({ msg:'Weather conditions required', section:'info' });
   if (!ins.insp.areasNotInspected) errors.push({ msg:'Areas not inspected must be completed', section:'info' });
 
-  CATS.forEach(cat => cat.items.forEach(item => {
-    (ins.items[item.id]?.defects || []).filter(df => df.reportInclude !== false).forEach(df => {
-      const ref = df.defectRef || item.l;
-      const where = `${cat.label} — ${item.l} (${ref})`;
+  allEntries(ins).forEach(({ key, label, cat }) => {
+    (ins.items[key]?.defects || []).filter(df => df.reportInclude !== false).forEach(df => {
+      const ref = df.defectRef || label;
+      const where = `${cat.label} — ${label} (${ref})`;
       if (!df.location) errors.push({ msg:`${where}: Location required`, section:'checklist', catId:cat.id });
       if (!df.description) errors.push({ msg:`${where}: Description required`, section:'checklist', catId:cat.id });
       if (!df.implication) errors.push({ msg:`${where}: Implication required`, section:'checklist', catId:cat.id });
       if (!df.recommendation) errors.push({ msg:`${where}: Recommendation required`, section:'checklist', catId:cat.id });
       if (!df.grade) errors.push({ msg:`${where}: Grade must be selected`, section:'checklist', catId:cat.id });
     });
-  }));
+  });
 
-  CATS.forEach(cat => cat.items.forEach(item => {
-    const it = ins.items[item.id];
+  allEntries(ins).forEach(({ key, label, cat }) => {
+    const it = ins.items[key];
     if (it?.status === ST.na && !it.naReason) {
-      errors.push({ msg:`${cat.label} — ${item.l}: reason required for Not Inspected`,
+      errors.push({ msg:`${cat.label} — ${label}: reason required for Not Inspected`,
                     section:'checklist', catId:cat.id });
     }
-  }));
+  });
 
   const hasReadings = ins.moisture.readings.length > 0;
   if (hasReadings && !ins.moisture.meterMake) errors.push({ msg:'Moisture Test: Meter make/model required', section:'summary' });
@@ -642,12 +1167,12 @@ function buildExecSummary(ins) {
 
   // ── 6. Scope limitations
   const naItems = [];
-  CATS.forEach(cat => cat.items.forEach(item => {
-    const it = ins.items?.[item.id];
+  allEntries(ins).forEach(({ key, label, cat }) => {
+    const it = ins.items?.[key];
     if (it?.status === ST.na && it.naReason) {
-      naItems.push(`${cat.label.replace(/^\d+\.\s/, '')} — ${item.l}: ${it.naReason}`);
+      naItems.push(`${cat.label.replace(/^\d+\.\s/, '')} — ${label}: ${it.naReason}`);
     }
-  }));
+  });
   out.push(
     `This inspection was visual and non-invasive. Concealed building elements, including those within wall cavities, ` +
     `beneath floor coverings and above ceiling linings, were not inspected and are excluded from this report. ` +
@@ -757,6 +1282,57 @@ function DefectField({ label, value, onCommit, placeholder, filled, rows = 0 }) 
         ? <textarea style={style} defaultValue={value || ''} onBlur={e => onCommit(e.target.value)} placeholder={placeholder} />
         : <input style={style} defaultValue={value || ''} onBlur={e => onCommit(e.target.value)} placeholder={placeholder} />}
     </FRow>
+  );
+}
+
+// BOINZ guide for one checklist item. Ticks record "looked at";
+// chips record what was found (material, type, etc.).
+function GuideList({ guide, it, onCheck, onChoice }) {
+  if (!guide?.length) return null;
+  return (
+    <div style={{ marginTop:10, background:'#F7F9FC', borderRadius:8, padding:'8px 10px', border:`1px solid ${C.border}` }}>
+      <div style={{ fontSize:10, fontWeight:700, color:C.primary, textTransform:'uppercase', letterSpacing:'.06em', marginBottom:6 }}>
+        Check
+      </div>
+      {guide.map((g, i) => {
+        if (g && typeof g === 'object' && !Array.isArray(g) && g.i) {
+          return <div key={i} style={{ fontSize:11, color:C.txt2, fontStyle:'italic', lineHeight:1.5, margin:'6px 0' }}>ℹ {g.i}</div>;
+        }
+        const k = guideKey(g);
+        if (Array.isArray(g)) {
+          const picked = it?.choices?.[k] || [];
+          return (
+            <div key={i} style={{ padding:'6px 0', borderBottom:`1px solid ${C.border}` }}>
+              <div style={{ fontSize:12, color:C.txt, marginBottom:5, fontWeight:600 }}>
+                {picked.length > 0 ? '☑' : '☐'} {g[0]}
+              </div>
+              <div style={{ display:'flex', flexWrap:'wrap', gap:5 }}>
+                {g[1].map(opt => {
+                  const on = picked.includes(opt);
+                  return (
+                    <button key={opt} onClick={() => onChoice(g, opt)}
+                      style={{ padding:'5px 10px', borderRadius:14, fontSize:12, cursor:'pointer',
+                               border:`1.5px solid ${on ? C.primary : C.border}`,
+                               background: on ? '#EDE9FF' : C.white, color: on ? C.primary : C.txt2,
+                               fontWeight: on ? 700 : 400 }}>{opt}</button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        }
+        const on = !!it?.checks?.[k];
+        return (
+          <label key={i} style={{ display:'flex', alignItems:'flex-start', gap:8, padding:'7px 0', cursor:'pointer',
+                                  borderBottom:`1px solid ${C.border}`, userSelect:'none' }}>
+            <input type="checkbox" checked={on} onChange={() => onCheck(g)}
+              style={{ width:17, height:17, marginTop:1, accentColor:C.primary, flexShrink:0 }}/>
+            <span style={{ fontSize:12, color: on ? C.txt2 : C.txt, lineHeight:1.45,
+                           textDecoration: on ? 'none' : 'none' }}>{g}</span>
+          </label>
+        );
+      })}
+    </div>
   );
 }
 
@@ -874,6 +1450,9 @@ function App() {
   const [cur, setCur] = useState(null);
   const [page, setPage] = useState('splash');
   const [catTab, setCatTab] = useState(0);
+  const [openGuide, setOpenGuide] = useState({});      // { [itemKey]: true }
+  const [spaceSel, setSpaceSel] = useState({});        // { [catId]: spaceId }
+  const [spaceDraft, setSpaceDraft] = useState('');
   const [photoMod, setPhotoMod] = useState(null);  // { itemId, defectId, idx }
   const [wordGenerating, setWordGenerating] = useState(false);
   const [migrationBanner, setMigrationBanner] = useState(false);
@@ -899,12 +1478,7 @@ function App() {
         const inspections = [];
         let anyMigrated = false;
         for (const raw of rawInspections) {
-          let { ins, migrated } = migrateToV3(raw);
-          const iv4 = migrateItemsToV4(ins);
-          if (iv4.migrated || !ins._itemsV4) {
-            ins = { ...ins, items: iv4.items, _itemsV4: true };
-            migrated = migrated || iv4.migrated;
-          }
+          const { ins, migrated } = migrateAll(raw);
           if (migrated) { await dbPut('inspections', ins); anyMigrated = true; }
           inspections.push(ins);
         }
@@ -958,8 +1532,64 @@ function App() {
   }
 
   function updItem(itemId, patch) {
-    return saveInspection({ ...cur, items: { ...cur.items, [itemId]: { ...cur.items[itemId], ...patch } } });
+    return saveInspection({ ...cur, items: { ...cur.items, [itemId]: { ...blankItem(), ...cur.items[itemId], ...patch } } });
   }
+  function toggleCheck(key, g) {
+    const it = cur.items[key] || blankItem();
+    const k = guideKey(g);
+    return updItem(key, { checks: { ...(it.checks || {}), [k]: !it.checks?.[k] } });
+  }
+  function toggleChoice(key, g, opt) {
+    const it = cur.items[key] || blankItem();
+    const k = guideKey(g);
+    const cur_ = it.choices?.[k] || [];
+    const next = cur_.includes(opt) ? cur_.filter(x => x !== opt) : [...cur_, opt];
+    return updItem(key, { choices: { ...(it.choices || {}), [k]: next } });
+  }
+
+  // ── Spaces (rooms / structures added on site) ────────────────
+  async function addSpace(catId, name) {
+    const nm = (name || '').trim();
+    if (!nm) return null;
+    const sp = { id: gid(), name: nm };
+    const spaces = { ...(cur.spaces || {}), [catId]: [...(cur.spaces?.[catId] || []), sp] };
+    await saveInspection({ ...cur, spaces, spaceNone: { ...(cur.spaceNone || {}), [catId]: false } });
+    showToast(`${nm} added`);
+    return sp.id;
+  }
+  function renameSpace(catId, spaceId, name) {
+    const nm = (name || '').trim();
+    if (!nm) return;
+    const spaces = { ...(cur.spaces || {}),
+      [catId]: (cur.spaces?.[catId] || []).map(x => x.id === spaceId ? { ...x, name: nm } : x) };
+    return saveInspection({ ...cur, spaces });
+  }
+  async function removeSpace(catId, spaceId) {
+    const sp = (cur.spaces?.[catId] || []).find(x => x.id === spaceId);
+    if (!sp) return;
+    const prefix = `${spaceId}${SPACE_SEP}`;
+    const keys = Object.keys(cur.items).filter(k => k.startsWith(prefix));
+    const nDefects = keys.reduce((n, k) => n + (cur.items[k]?.defects?.length || 0), 0);
+    const nPhotos = keys.reduce((n, k) => n + (cur.items[k]?.photos?.length || 0)
+      + (cur.items[k]?.defects || []).reduce((m, d) => m + (d.photos?.length || 0), 0), 0);
+    const warn = nDefects || nPhotos ? `\n\nThis will also delete ${nDefects} defect(s) and ${nPhotos} photo(s).` : '';
+    if (!confirm(`Remove "${sp.name}"?${warn}`)) return;
+    for (const k of keys) {
+      const it = cur.items[k];
+      for (const ph of [...(it.photos || []), ...(it.defects || []).flatMap(d => d.photos || [])]) {
+        if (ph.photoId) await dbDelete('photos', ph.photoId).catch(() => {});
+      }
+    }
+    const items = { ...cur.items };
+    keys.forEach(k => delete items[k]);
+    const spaces = { ...(cur.spaces || {}), [catId]: (cur.spaces?.[catId] || []).filter(x => x.id !== spaceId) };
+    await saveInspection({ ...cur, items, spaces });
+    showToast(`${sp.name} removed`);
+  }
+  function setSpaceNone(catId, val) {
+    return saveInspection({ ...cur, spaceNone: { ...(cur.spaceNone || {}), [catId]: val } });
+  }
+
   function updF(sec, k, v) { return saveInspection({ ...cur, [sec]: { ...cur[sec], [k]: v } }); }
   function updWT(k, v) {
     const wt = { ...cur.wt, factors: { ...cur.wt.factors, [k]: v } };
@@ -1067,8 +1697,18 @@ function App() {
   // ── Item inspection photos ───────────────────────────────────
   // Evidence that an item was inspected, independent of any defect.
   // Labelled from the item id, e.g. SITE-DRIVE-01.
-  function itemPhotoCode(itemId) {
-    return itemId.replace(/_/g, '-').toUpperCase();
+  // SITE-RET for fixed items; INT-LIVINGROOM-CEIL for space items.
+  function itemPhotoCode(key) {
+    if (!key.includes(SPACE_SEP)) return key.replace(/_/g, '-').toUpperCase();
+    const [spaceId, itemId] = key.split(SPACE_SEP);
+    for (const cat of CATS.filter(c => c.kind === 'space')) {
+      const sp = (cur.spaces?.[cat.id] || []).find(x => x.id === spaceId);
+      if (sp) {
+        const room = sp.name.toUpperCase().replace(/[^A-Z0-9]+/g, '').slice(0, 12) || 'ROOM';
+        return `${CAT_CODE[cat.id] || cat.id.toUpperCase()}-${room}-${itemId.toUpperCase()}`;
+      }
+    }
+    return itemId.toUpperCase();
   }
 
   async function handleItemFiles(files, itemId) {
@@ -1137,7 +1777,7 @@ function App() {
   // Labelled SITE-01, SUB-01… so Downloads filenames stay self-describing.
   const CAT_CODE = { site:'SITE', sub:'SUB', ext:'EXT', roof:'ROOF', roofspace:'RSPACE',
                      int:'INT', kitchen:'KIT', bath:'BATH', laundry:'LAU', garage:'GAR',
-                     general:'GEN', moisture:'MOIST', thermal:'THERM' };
+                     general:'GEN', moisture:'MOIST', thermal:'THERM', balc:'BALC' };
 
   async function handleCatFiles(files, catId) {
     if (!files?.length || !catId) return;
@@ -1300,7 +1940,7 @@ function App() {
       if (!data.wwwExportVersion || !data.inspection) {
         showToast('Invalid export file', 'error'); return;
       }
-      const imported = { ...data.inspection, _importedAt: new Date().toISOString(), _importedFrom: data.exportedFrom };
+      const imported = { ...migrateAll(data.inspection).ins, _importedAt: new Date().toISOString(), _importedFrom: data.exportedFrom };
       await dbPut('inspections', imported);
       setList(prev => {
         const i = prev.findIndex(x => x.id === imported.id);
@@ -2111,7 +2751,7 @@ function App() {
         <div style={{ display:'flex', gap:5, overflowX:'auto', marginBottom:14, paddingBottom:4 }}>
           {CATS.map((c,i) => {
             const s = catSt(c.id, cur);
-            const hasIncomplete = c.items.some(item => itemHasIncomplete(cur.items[item.id]));
+            const hasIncomplete = catItems(c, cur).some(e => itemHasIncomplete(cur.items[e.key]));
             return (
               <button key={c.id} onClick={()=>setCatTab(i)} style={{ flex:'0 0 auto', padding:'6px 11px', borderRadius:20, border:'none', background:catTab===i?C.primary:C.white, color:catTab===i?'#fff':C.txt2, fontSize:11, fontWeight:catTab===i?700:500, cursor:'pointer', boxShadow:catTab===i?'0 2px 8px rgba(75,57,239,.3)':'0 1px 3px rgba(0,0,0,.08)', display:'flex', alignItems:'center', gap:4, whiteSpace:'nowrap' }}>
                 {c.icon} {c.label.replace(/^\d+\.\s/,'')}
@@ -2179,7 +2819,81 @@ function App() {
           );
         })()}
 
-        {cat.items.map(item => {
+        {/* ── Space selector (rooms / structures) ── */}
+        {cat.kind === 'space' && (() => {
+          const list = cur.spaces?.[cat.id] || [];
+          const selId = list.find(x => x.id === spaceSel[cat.id]) ? spaceSel[cat.id] : list[0]?.id;
+          const sel = list.find(x => x.id === selId);
+          const used = new Set(list.map(x => x.name));
+          return (
+            <Card style={{ border:`1px solid ${C.primary}` }}>
+              <SecTitle color={C.primary}>{cat.spaceNoun === 'room' ? 'Rooms' : `${cat.spaceNoun[0].toUpperCase()}${cat.spaceNoun.slice(1)}s`}</SecTitle>
+
+              {list.length > 0 && (
+                <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom:10 }}>
+                  {list.map(sp => {
+                    const on = sp.id === selId;
+                    const n = cat.items.filter(t => (cur.items[`${sp.id}${SPACE_SEP}${t.id}`]?.status || ST.pending) !== ST.pending).length;
+                    return (
+                      <button key={sp.id} onClick={() => setSpaceSel(p => ({ ...p, [cat.id]: sp.id }))}
+                        style={{ padding:'7px 12px', borderRadius:16, fontSize:12, fontWeight:on?700:500, cursor:'pointer',
+                                 border:`1.5px solid ${on ? C.primary : C.border}`, background:on ? C.primary : C.white,
+                                 color:on ? '#fff' : C.txt }}>
+                        {sp.name} <span style={{ opacity:.75, fontWeight:400 }}>{n}/{cat.items.length}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Add */}
+              <div style={{ display:'flex', gap:6, marginBottom:6 }}>
+                <input style={{ ...inp, flex:1, padding:'8px 10px', fontSize:13 }} value={spaceDraft}
+                  onChange={e => setSpaceDraft(e.target.value)}
+                  placeholder={`Add ${cat.spaceNoun} — e.g. ${cat.suggest?.[0] || ''}`} />
+                <button onClick={async () => {
+                    const id = await addSpace(cat.id, spaceDraft);
+                    if (id) { setSpaceSel(p => ({ ...p, [cat.id]: id })); setSpaceDraft(''); }
+                  }}
+                  style={{ padding:'0 14px', borderRadius:8, border:'none', background:C.primary, color:'#fff', fontWeight:700, fontSize:13, cursor:'pointer' }}>+ Add</button>
+              </div>
+              <div style={{ display:'flex', flexWrap:'wrap', gap:5, marginBottom: sel ? 10 : 0 }}>
+                {(cat.suggest || []).filter(x => !used.has(x)).map(x => (
+                  <button key={x} onClick={async () => { const id = await addSpace(cat.id, x); if (id) setSpaceSel(p => ({ ...p, [cat.id]: id })); }}
+                    style={{ padding:'4px 9px', borderRadius:12, fontSize:11, cursor:'pointer', border:`1px dashed ${C.border}`, background:C.white, color:C.txt2 }}>+ {x}</button>
+                ))}
+              </div>
+
+              {/* Rename / remove selected */}
+              {sel && (
+                <div style={{ display:'flex', gap:6, alignItems:'center', paddingTop:8, borderTop:`1px solid ${C.border}` }}>
+                  <input key={`rn-${sel.id}`} style={{ ...inp, flex:1, padding:'7px 10px', fontSize:13 }} defaultValue={sel.name}
+                    onBlur={e => { if (e.target.value.trim() && e.target.value !== sel.name) renameSpace(cat.id, sel.id, e.target.value); }} />
+                  <button onClick={() => removeSpace(cat.id, sel.id)}
+                    style={{ padding:'7px 10px', borderRadius:8, border:`1px solid ${C.danger}`, background:C.white, color:C.danger, fontSize:12, fontWeight:600, cursor:'pointer' }}>Remove</button>
+                </div>
+              )}
+
+              {/* None present */}
+              {list.length === 0 && (
+                <label style={{ display:'flex', alignItems:'center', gap:8, marginTop:10, fontSize:12, color:C.txt, cursor:'pointer' }}>
+                  <input type="checkbox" checked={!!cur.spaceNone?.[cat.id]} onChange={e => setSpaceNone(cat.id, e.target.checked)}
+                    style={{ width:16, height:16, accentColor:C.na }}/>
+                  None present at this property
+                </label>
+              )}
+            </Card>
+          );
+        })()}
+
+        {(cat.kind === 'space'
+          ? (() => {
+              const list = cur.spaces?.[cat.id] || [];
+              const sp = list.find(x => x.id === spaceSel[cat.id]) || list[0];
+              return sp ? cat.items.map(t => ({ id:`${sp.id}${SPACE_SEP}${t.id}`, l:t.l, guide:t.guide, spaceName:sp.name })) : [];
+            })()
+          : cat.items
+        ).map(item => {
           const it = cur.items[item.id] || blankItem();
           const defects = it.defects || [];
           const expanded = defects.length > 0;
@@ -2195,7 +2909,18 @@ function App() {
               {/* Item header */}
               <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                 <div style={{ flex:1 }}>
-                  <span style={{ fontSize:13, fontWeight:500, color:C.txt }}>{item.l}</span>
+                  <button onClick={() => setOpenGuide(p => ({ ...p, [item.id]: !p[item.id] }))}
+                    style={{ background:'none', border:'none', padding:0, cursor:'pointer', textAlign:'left', fontFamily:'inherit' }}>
+                    <span style={{ fontSize:13, fontWeight:500, color:C.txt }}>
+                      <span style={{ display:'inline-block', width:12, color:C.primary, fontSize:10 }}>{openGuide[item.id] ? '▾' : '▸'}</span>
+                      {item.l}
+                    </span>
+                    {(() => { const gp = guideProgress(item, it); return gp.total > 0 && (
+                      <span style={{ marginLeft:6, fontSize:10, fontWeight:700, padding:'1px 6px', borderRadius:4,
+                                     background: gp.done === gp.total ? '#E8F5F3' : '#EDE9FF',
+                                     color: gp.done === gp.total ? C.done : C.primary }}>{gp.done}/{gp.total}</span>
+                    ); })()}
+                  </button>
                   {it.photos?.length > 0 && (
                     <span style={{ marginLeft:6, fontSize:10, fontWeight:700, padding:'1px 6px', borderRadius:4, background:'#E8F5F3', color:C.done }}>
                       📷 {it.photos.length}
@@ -2216,6 +2941,13 @@ function App() {
                     style={{ padding:'6px 10px', borderRadius:6, border:'none', fontSize:11, fontWeight:700, cursor:'pointer', background:defects.length?C.danger:C.bg, color:defects.length?'#fff':C.txt2 }}>⚑ +</button>
                 </div>
               </div>
+
+              {/* ── BOINZ guide (tap item name to open) ── */}
+              {openGuide[item.id] && (
+                <GuideList guide={item.guide} it={it}
+                  onCheck={g => toggleCheck(item.id, g)}
+                  onChoice={(g, opt) => toggleChoice(item.id, g, opt)} />
+              )}
 
               {/* ── Not inspected: reason is mandatory ── */}
               {it.status === ST.na && (
