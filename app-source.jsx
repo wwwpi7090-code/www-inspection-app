@@ -199,7 +199,7 @@ async function checkStorageQuota() {
 }
 
 // ─── CONSTANTS ───────────────────────────────────────────────
-const APP_VERSION = 'v3.6';
+const APP_VERSION = 'v3.7';
 const APP_DATE = '2026-09-02'; // Update this on each release
 const APP_VER_DISPLAY = `${APP_VERSION} · ${APP_DATE}`;
 
@@ -326,13 +326,18 @@ const genFileNo = () => {
 };
 
 function blankItem() {
-  // A checklist item holds zero or more defects. status is the item's own state.
-  return { status:ST.pending, defects:[] };
+  // An item records that it was inspected (status, photos, note) AND any defects
+  // found. The two are independent: an item can be inspected and clear, inspected
+  // with defects, or not inspected at all.
+  return { status:ST.pending, photos:[], note:'', naReason:'', defects:[] };
 }
 
 function blankDefect() {
+  // reportInclude=false keeps the defect in the app and on the maintenance list
+  // but out of the formal report — for repair scoping outside a pre-purchase brief.
   return { id: gid(), defectRef:'', location:'', description:'', implication:'',
-           recommendation:'', grade:'', axes:[], material:'', photos:[] };
+           recommendation:'', grade:'', axes:[], material:'', photos:[],
+           reportInclude: true };
 }
 
 // Every defect across the inspection, in D-XX order, with its item/category context.
@@ -348,6 +353,11 @@ function allDefects(ins) {
     parseInt((a.defectRef||'D-99').replace('D-',''),10) -
     parseInt((b.defectRef||'D-99').replace('D-',''),10));
 }
+
+// Defects that belong in the formal report.
+function reportDefects(ins) { return allDefects(ins).filter(df => df.reportInclude !== false); }
+// Defects held back from the report — maintenance scoping only.
+function maintenanceOnlyDefects(ins) { return allDefects(ins).filter(df => df.reportInclude === false); }
 
 function isDefectComplete(df) {
   return !!(df.location && df.description && df.implication && df.recommendation && df.grade);
@@ -533,7 +543,7 @@ function validateReport(ins) {
   if (!ins.insp.areasNotInspected) errors.push({ msg:'Areas not inspected must be completed', section:'info' });
 
   CATS.forEach(cat => cat.items.forEach(item => {
-    (ins.items[item.id]?.defects || []).forEach(df => {
+    (ins.items[item.id]?.defects || []).filter(df => df.reportInclude !== false).forEach(df => {
       const ref = df.defectRef || item.l;
       const where = `${cat.label} — ${item.l} (${ref})`;
       if (!df.location) errors.push({ msg:`${where}: Location required`, section:'checklist', catId:cat.id });
@@ -542,6 +552,14 @@ function validateReport(ins) {
       if (!df.recommendation) errors.push({ msg:`${where}: Recommendation required`, section:'checklist', catId:cat.id });
       if (!df.grade) errors.push({ msg:`${where}: Grade must be selected`, section:'checklist', catId:cat.id });
     });
+  }));
+
+  CATS.forEach(cat => cat.items.forEach(item => {
+    const it = ins.items[item.id];
+    if (it?.status === ST.na && !it.naReason) {
+      errors.push({ msg:`${cat.label} — ${item.l}: reason required for Not Inspected`,
+                    section:'checklist', catId:cat.id });
+    }
   }));
 
   const hasReadings = ins.moisture.readings.length > 0;
@@ -584,7 +602,7 @@ function buildExecSummary(ins) {
   }
 
   // ── 3. Significant Defects (only — no maintenance items)
-  const sig = allDefects(ins).filter(df => df.grade === 'significant');
+  const sig = reportDefects(ins).filter(df => df.grade === 'significant');
 
   if (sig.length) {
     out.push(
@@ -600,7 +618,7 @@ function buildExecSummary(ins) {
   }
 
   // ── 4. Further investigation items
-  const fi = allDefects(ins)
+  const fi = reportDefects(ins)
     .filter(df => (df.axes || []).includes('further_investigation'))
     .map(df => df.defectRef || df.item);
   if (fi.length) {
@@ -623,11 +641,21 @@ function buildExecSummary(ins) {
   }
 
   // ── 6. Scope limitations
+  const naItems = [];
+  CATS.forEach(cat => cat.items.forEach(item => {
+    const it = ins.items?.[item.id];
+    if (it?.status === ST.na && it.naReason) {
+      naItems.push(`${cat.label.replace(/^\d+\.\s/, '')} — ${item.l}: ${it.naReason}`);
+    }
+  }));
   out.push(
     `This inspection was visual and non-invasive. Concealed building elements, including those within wall cavities, ` +
     `beneath floor coverings and above ceiling linings, were not inspected and are excluded from this report. ` +
     `Areas not inspected: ${ins.insp?.areasNotInspected || '—'}.`
   );
+  if (naItems.length) {
+    out.push(`The following items were not inspected, for the reasons recorded: ${naItems.join('; ')}.`);
+  }
 
   // ── 7. HIGH risk — invasive testing + precedent
   if (rating === 'HIGH') {
@@ -1020,6 +1048,7 @@ function App() {
   function onFileInput(e) {
     const t = pendingPhotoItem.current;
     if (t?.catId) handleCatFiles(e.target.files, t.catId);
+    else if (t?.itemOnly) handleItemFiles(e.target.files, t.itemId);
     else handleFiles(e.target.files, t);
   }
 
@@ -1031,6 +1060,74 @@ function App() {
     const defects = item.defects.map(x =>
       x.id === defectId ? { ...x, photos: x.photos.filter((_, n) => n !== photoIdx) } : x);
     await updItem(itemId, { defects });
+    setPhotoMod(null);
+    showToast('Photo deleted');
+  }
+
+  // ── Item inspection photos ───────────────────────────────────
+  // Evidence that an item was inspected, independent of any defect.
+  // Labelled from the item id, e.g. SITE-DRIVE-01.
+  function itemPhotoCode(itemId) {
+    return itemId.replace(/_/g, '-').toUpperCase();
+  }
+
+  async function handleItemFiles(files, itemId) {
+    if (!files?.length || !itemId) return;
+    const code = itemPhotoCode(itemId);
+
+    for (let i = 0; i < files.length; i++) {
+      try {
+        const blob = await compressImage(files[i]);
+        const ins = (await dbGet('inspections', cur.id)) || cur;
+        const item = ins.items[itemId] || blankItem();
+        const existing = item.photos || [];
+
+        const photoId = gid();
+        const seq = existing.length + 1;
+        const photoLabel = `${code}-${String(seq).padStart(2, '0')}`;
+        const filename = photoFilename(ins.fileNo, photoLabel, seq);
+
+        const rec = { photoId, inspectionId: ins.id, defectRef: photoLabel, itemId, seq,
+                      photoLabel, blob, caption: '', savedToDevice: false,
+                      saveStatus: 'pending', createdAt: new Date().toISOString() };
+
+        let saveStatus = 'ok';
+        try { await dbPutVerified('photos', { ...rec, saveStatus: 'ok' }); }
+        catch { saveStatus = 'fail'; showToast('🔴 Photo save to app failed — retry', 'error'); }
+
+        let savedToDevice = false;
+        if (ins.saveDevicePhotos) {
+          savedToDevice = saveToDevice(blob, filename);
+          if (!savedToDevice && saveStatus !== 'fail') saveStatus = 'partial';
+        }
+        await dbPut('photos', { ...rec, saveStatus, savedToDevice });
+
+        const ref = { photoId, photoLabel, caption: '', saveStatus, savedToDevice };
+        await saveInspection({ ...ins, items: { ...ins.items,
+          [itemId]: { ...item, photos: [...existing, ref], status: item.status === ST.pending ? ST.done : item.status } } });
+
+        showToast(savedToDevice ? `✅ ${photoLabel} saved + downloaded`
+          : saveStatus === 'ok' ? `💾 ${photoLabel} saved to app` : '⚠️ Partial save — check',
+          saveStatus === 'fail' ? 'error' : 'ok');
+      } catch (err) {
+        console.error('Item photo error:', err);
+        showToast('🔴 Photo error — please retry', 'error');
+      }
+    }
+    if (fileRef.current) fileRef.current.value = '';
+  }
+
+  function updItemPhoto(itemId, idx, patch) {
+    const photos = (cur.items[itemId]?.photos || []).map((p, n) => n === idx ? { ...p, ...patch } : p);
+    return updItem(itemId, { photos });
+  }
+
+  async function deleteItemPhoto(itemId, idx) {
+    const photos = [...(cur.items[itemId]?.photos || [])];
+    const ref = photos[idx];
+    if (ref?.photoId) await dbDelete('photos', ref.photoId).catch(() => {});
+    photos.splice(idx, 1);
+    await updItem(itemId, { photos });
     setPhotoMod(null);
     showToast('Photo deleted');
   }
@@ -1160,8 +1257,15 @@ function App() {
   // ── Export / Import JSON ────────────────────────────────────
   function exportJSON() {
     if (!cur) return;
+    // Photo blobs stay in IndexedDB and on the device; only references travel.
+    const stripPhotos = arr => (arr || []).map(p => ({
+      photoId: p.photoId, photoLabel: p.photoLabel, num: p.num,
+      caption: p.caption || '', _needsReattach: true, saveStatus: 'missing',
+    }));
+
     const exportData = {
-      wwwExportVersion: "1.0",
+      wwwExportVersion: "2.0",
+      appVersion: APP_VERSION,
       exportedAt: new Date().toISOString(),
       exportedFrom: /Mobi|Android/i.test(navigator.userAgent) ? 'mobile' : 'desktop',
       inspection: {
@@ -1169,15 +1273,16 @@ function App() {
         items: Object.fromEntries(
           Object.entries(cur.items).map(([id, item]) => [id, {
             ...item,
-            // Keep photo refs (label, num, caption) but mark as needing re-attachment
-            photos: (item.photos||[]).map(p => ({
-              photoId: p.photoId, num: p.num, photoLabel: p.photoLabel,
-              caption: p.caption||'', _needsReattach: true, saveStatus: 'missing'
-            }))
+            photos: stripPhotos(item.photos),
+            defects: (item.defects || []).map(df => ({ ...df, photos: stripPhotos(df.photos) })),
           }])
-        )
+        ),
+        catPhotos: Object.fromEntries(
+          Object.entries(cur.catPhotos || {}).map(([catId, v]) => [catId, { photos: stripPhotos(v.photos) }])
+        ),
       }
     };
+
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -1185,7 +1290,7 @@ function App() {
     a.download = `${cur.fileNo}_${new Date().toISOString().slice(0,10)}.json`;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 2000);
-    showToast('✅ JSON exported — re-attach photos on other device');
+    showToast('✅ JSON exported — photo files stay in Downloads');
   }
 
   async function importJSON(file) {
@@ -1306,7 +1411,7 @@ function App() {
       };
 
       // ── Build flagged list ──
-      const flagged = allDefects(cur).map(d => ({
+      const flagged = reportDefects(cur).map(d => ({
         ...d,
         gc: gradeColors[d.grade] || {},
         photoLabels: (d.photos||[]).map(ph=>ph.photoLabel||'?').join(', '),
@@ -2091,6 +2196,11 @@ function App() {
               <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                 <div style={{ flex:1 }}>
                   <span style={{ fontSize:13, fontWeight:500, color:C.txt }}>{item.l}</span>
+                  {it.photos?.length > 0 && (
+                    <span style={{ marginLeft:6, fontSize:10, fontWeight:700, padding:'1px 6px', borderRadius:4, background:'#E8F5F3', color:C.done }}>
+                      📷 {it.photos.length}
+                    </span>
+                  )}
                   {defects.length > 0 && (
                     <span style={{ marginLeft:6, fontSize:10, fontWeight:700, padding:'1px 6px', borderRadius:4, background:C.bg, color:C.txt2 }}>
                       {defects.length} defect{defects.length > 1 ? 's' : ''}
@@ -2098,14 +2208,67 @@ function App() {
                   )}
                 </div>
                 <div style={{ display:'flex', gap:5 }}>
-                  <button onClick={()=>updItem(item.id,{status:ST.done})}
-                    style={{ padding:'6px 10px', borderRadius:6, border:'none', fontSize:11, fontWeight:700, cursor:'pointer', background:it.status===ST.done&&!defects.length?C.done:C.bg, color:it.status===ST.done&&!defects.length?'#fff':C.txt2 }}>✓ OK</button>
+                  <button onClick={()=>updItem(item.id,{status:ST.done, naReason:''})}
+                    style={{ padding:'6px 10px', borderRadius:6, border:'none', fontSize:11, fontWeight:700, cursor:'pointer', background:it.status===ST.done?C.done:C.bg, color:it.status===ST.done?'#fff':C.txt2 }}>✓ OK</button>
                   <button onClick={()=>updItem(item.id,{status:ST.na})}
                     style={{ padding:'6px 10px', borderRadius:6, border:'none', fontSize:11, fontWeight:700, cursor:'pointer', background:it.status===ST.na?C.na:C.bg, color:it.status===ST.na?'#fff':C.txt2 }}>N/A</button>
                   <button onClick={()=>addDefect(item.id)}
                     style={{ padding:'6px 10px', borderRadius:6, border:'none', fontSize:11, fontWeight:700, cursor:'pointer', background:defects.length?C.danger:C.bg, color:defects.length?'#fff':C.txt2 }}>⚑ +</button>
                 </div>
               </div>
+
+              {/* ── Not inspected: reason is mandatory ── */}
+              {it.status === ST.na && (
+                <div style={{ marginTop:10, background:C.bg, borderRadius:8, padding:'10px 12px',
+                  border:`1.5px solid ${it.naReason ? C.border : C.amber}` }}>
+                  <DefectField label="Reason not inspected *" value={it.naReason} filled={!!it.naReason} rows={2}
+                    onCommit={v=>updItem(item.id,{naReason:v})}
+                    placeholder="e.g. No access hatch to this area; obstructed by stored goods" />
+                  <div style={{ fontSize:10, color:C.txt2, fontStyle:'italic', marginTop:-6 }}>
+                    Carried into Areas Not Inspected. Required before the report can be generated.
+                  </div>
+                </div>
+              )}
+
+              {/* ── Inspection evidence: applies whether or not defects were found ── */}
+              {it.status !== ST.na && (
+                <div style={{ marginTop:10, background:'#FAFCFC', borderRadius:8, padding:'10px 12px', border:`1px solid ${C.border}` }}>
+                  <div style={{ fontSize:10, fontWeight:700, color:C.done, textTransform:'uppercase', letterSpacing:'.06em', marginBottom:8 }}>
+                    Inspection record
+                  </div>
+
+                  {it.photos?.length > 0 && (
+                    <div style={{ display:'flex', flexWrap:'wrap', gap:8, marginBottom:10 }}>
+                      {it.photos.map((ph, idx) => (
+                        <div key={ph.photoId||idx} style={{ position:'relative' }}>
+                          <PhotoThumb photoRef={ph} onClick={()=>setPhotoMod({ itemId:item.id, itemOnly:true, idx })}/>
+                          <button onClick={e=>{ e.stopPropagation(); deleteItemPhoto(item.id, idx); }}
+                            title="Remove photo"
+                            style={{ position:'absolute', top:-6, right:-6, width:22, height:22, borderRadius:'50%', border:'none', background:C.danger, color:'#fff', fontSize:12, fontWeight:700, cursor:'pointer', lineHeight:1, boxShadow:'0 1px 4px rgba(0,0,0,.3)' }}>✕</button>
+                          <div style={{ fontSize:8, fontFamily:'monospace', color:C.txt2, textAlign:'center', marginTop:2 }}>{ph.photoLabel}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div style={{ display:'flex', gap:6, marginBottom:8 }}>
+                    <button onClick={()=>{
+                      pendingPhotoItem.current = { itemId:item.id, itemOnly:true };
+                      fileRef.current.setAttribute('capture', 'environment');
+                      fileRef.current.click();
+                    }} style={{ flex:1, padding:'8px', borderRadius:6, border:`1px solid ${C.done}`, background:C.white, color:C.done, fontSize:12, fontWeight:600, cursor:'pointer' }}>📷 Camera</button>
+                    <button onClick={()=>{
+                      pendingPhotoItem.current = { itemId:item.id, itemOnly:true };
+                      fileRef.current.removeAttribute('capture');
+                      fileRef.current.click();
+                    }} style={{ flex:1, padding:'8px', borderRadius:6, border:`1px solid ${C.done}`, background:C.white, color:C.done, fontSize:12, fontWeight:600, cursor:'pointer' }}>🖼 Gallery</button>
+                  </div>
+
+                  <DefectField label="Observation note (optional)" value={it.note} filled rows={2}
+                    onCommit={v=>updItem(item.id,{note:v})}
+                    placeholder="e.g. Surface crazing observed, no structural significance. Not recorded as a defect." />
+                </div>
+              )}
 
               {expanded && (
                 <div style={{ marginTop:12 }}>
@@ -2123,6 +2286,17 @@ function App() {
                           <button onClick={()=>removeDefect(item.id, df.id)}
                             style={{ background:'none', border:'none', color:C.danger, fontSize:12, fontWeight:600, cursor:'pointer', padding:'2px 4px' }}>✕ Delete</button>
                         </div>
+
+                        {/* Report inclusion — a use decision, not a grade */}
+                        <label style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer', padding:'8px 10px', borderRadius:6, marginBottom:10,
+                          background: df.reportInclude === false ? '#F3F0FF' : C.bg,
+                          border: `1px solid ${df.reportInclude === false ? C.primary : C.border}` }}>
+                          <input type="checkbox" checked={df.reportInclude !== false} style={{ width:15, height:15, accentColor:C.primary }}
+                            onChange={e=>updDefect(item.id, df.id, { reportInclude: e.target.checked })}/>
+                          <span style={{ fontSize:12, fontWeight:600, color:C.txt }}>
+                            {df.reportInclude === false ? 'Maintenance list only — excluded from report' : 'Include in report'}
+                          </span>
+                        </label>
 
                         {bad && (
                           <div style={{ background:'#FFF8EC', border:`1px solid ${C.amber}`, borderRadius:6, padding:'8px 10px', marginBottom:10, fontSize:11, color:'#D4820A', fontWeight:600 }}>
@@ -2234,6 +2408,36 @@ function App() {
           );
         })}
 
+        {/* Maintenance list — held out of the formal report */}
+        {(() => {
+          const mo = maintenanceOnlyDefects(cur);
+          if (!mo.length) return null;
+          return (
+            <Card style={{ border:`1px dashed ${C.primary}` }}>
+              <SecTitle color={C.primary}>🔧 Maintenance List — not in report ({mo.length})</SecTitle>
+              <div style={{ fontSize:11, color:C.txt2, marginBottom:10, lineHeight:1.5 }}>
+                Recorded for repair scoping. These are excluded from the Word report and from the
+                Executive Summary.
+              </div>
+              {mo.map(d => {
+                const g = GRADES.find(x=>x.id===d.grade);
+                return (
+                  <div key={d.id} style={{ padding:'8px 0', borderBottom:`1px solid ${C.border}` }}>
+                    <div style={{ fontWeight:700, fontSize:12, color:C.txt, marginBottom:2 }}>
+                      <span style={{ fontFamily:'monospace', marginRight:6, color:g?.color || C.txt2 }}>{d.defectRef}</span>
+                      {d.catShort} › {d.item}
+                      {g && <span style={{ marginLeft:6, fontSize:10, background:g.bg, color:g.color, padding:'1px 6px', borderRadius:8 }}>{g.label}</span>}
+                    </div>
+                    {d.location && <div style={{ fontSize:11, color:C.txt2 }}>📍 {d.location}</div>}
+                    {d.description && <div style={{ fontSize:12, color:C.txt, marginTop:2 }}>{d.description}</div>}
+                    {d.recommendation && <div style={{ fontSize:11, color:C.primary, fontWeight:600, marginTop:2 }}>→ {d.recommendation}</div>}
+                  </div>
+                );
+              })}
+            </Card>
+          );
+        })()}
+
         <div style={{height:10}}/>
         {catTab < CATS.length-1
           ? <BtnPrimary onClick={()=>setCatTab(catTab+1)}>Next: {CATS[catTab+1].label} →</BtnPrimary>
@@ -2295,7 +2499,7 @@ function App() {
 
         {/* Defects by grade */}
         {GRADES.map(g => {
-          const items = defectList.filter(df=>df.grade===g.id);
+          const items = defectList.filter(df=>df.grade===g.id && df.reportInclude!==false);
           if (!items.length) return null;
           return (
             <Card key={g.id} style={{ border:`1px solid ${g.color}` }}>
@@ -2430,9 +2634,10 @@ function App() {
   // Photo modal
   if (photoMod && cur) {
     const isCat = !!photoMod.catId;
-    const df = isCat ? null : (cur.items[photoMod.itemId]?.defects || []).find(x => x.id === photoMod.defectId);
-    const photoRef = isCat
-      ? cur.catPhotos?.[photoMod.catId]?.photos?.[photoMod.idx]
+    const isItem = !!photoMod.itemOnly;
+    const df = (isCat || isItem) ? null : (cur.items[photoMod.itemId]?.defects || []).find(x => x.id === photoMod.defectId);
+    const photoRef = isCat ? cur.catPhotos?.[photoMod.catId]?.photos?.[photoMod.idx]
+      : isItem ? cur.items[photoMod.itemId]?.photos?.[photoMod.idx]
       : df?.photos?.[photoMod.idx];
     return (
       <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.93)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column' }}>
@@ -2442,10 +2647,11 @@ function App() {
         <input style={{...inp, width:260, marginTop:10, textAlign:'center'}} placeholder="Caption (required for report)" defaultValue={photoRef?.caption||''}
           onBlur={e => {
             if (isCat) { updCatPhoto(photoMod.catId, photoMod.idx, { caption: e.target.value }); return; }
+            if (isItem) { updItemPhoto(photoMod.itemId, photoMod.idx, { caption: e.target.value }); return; }
             const photos = df.photos.map((p, n) => n === photoMod.idx ? { ...p, caption: e.target.value } : p);
             updDefect(photoMod.itemId, photoMod.defectId, { photos });
           }}/>
-        <button onClick={()=>isCat ? deleteCatPhoto(photoMod.catId, photoMod.idx) : deletePhoto(photoMod.itemId, photoMod.defectId, photoMod.idx)}
+        <button onClick={()=>isCat ? deleteCatPhoto(photoMod.catId, photoMod.idx) : isItem ? deleteItemPhoto(photoMod.itemId, photoMod.idx) : deletePhoto(photoMod.itemId, photoMod.defectId, photoMod.idx)}
           style={{ marginTop:12, background:C.danger, border:'none', color:'#fff', borderRadius:8, padding:'10px 24px', fontSize:14, cursor:'pointer' }}>
           🗑 Delete Photo
         </button>
