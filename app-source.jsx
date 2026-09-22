@@ -199,8 +199,8 @@ async function checkStorageQuota() {
 }
 
 // ─── CONSTANTS ───────────────────────────────────────────────
-const APP_VERSION = 'v3.7';
-const APP_DATE = '2026-09-02'; // Update this on each release
+const APP_VERSION = 'v3.7.1';
+const APP_DATE = '2026-09-22'; // Update this on each release
 const APP_VER_DISPLAY = `${APP_VERSION} · ${APP_DATE}`;
 
 const ST = { pending: 'PENDING', done: 'DONE', na: 'N/A' };
@@ -2182,7 +2182,7 @@ function App() {
         {cat.items.map(item => {
           const it = cur.items[item.id] || blankItem();
           const defects = it.defects || [];
-          const expanded = it.status !== ST.pending || defects.length > 0;
+          const expanded = defects.length > 0;
           const incomplete = defects.some(df => !isDefectComplete(df));
           const worst = GRADES.find(g => defects.some(df => df.grade === g.id));
 
@@ -2231,7 +2231,7 @@ function App() {
               )}
 
               {/* ── Inspection evidence: applies whether or not defects were found ── */}
-              {it.status !== ST.na && (
+              {(it.status === ST.done || defects.length > 0) && (
                 <div style={{ marginTop:10, background:'#FAFCFC', borderRadius:8, padding:'10px 12px', border:`1px solid ${C.border}` }}>
                   <div style={{ fontSize:10, fontWeight:700, color:C.done, textTransform:'uppercase', letterSpacing:'.06em', marginBottom:8 }}>
                     Inspection record
@@ -2398,10 +2398,12 @@ function App() {
                     );
                   })}
 
-                  <button onClick={()=>addDefect(item.id)}
-                    style={{ width:'100%', padding:'10px', borderRadius:8, border:`1.5px dashed ${C.danger}`, background:C.white, color:C.danger, fontSize:13, fontWeight:700, cursor:'pointer' }}>
-                    ⚑ + Add {defects.length ? 'another ' : ''}defect to {item.l}
-                  </button>
+                  {defects.length > 0 && (
+                    <button onClick={()=>addDefect(item.id)}
+                      style={{ width:'100%', padding:'10px', borderRadius:8, border:`1.5px dashed ${C.danger}`, background:C.white, color:C.danger, fontSize:13, fontWeight:700, cursor:'pointer' }}>
+                      ⚑ + Add another defect to {item.l}
+                    </button>
+                  )}
                 </div>
               )}
             </Card>

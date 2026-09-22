@@ -284,8 +284,8 @@ async function checkStorageQuota() {
 }
 
 // ─── CONSTANTS ───────────────────────────────────────────────
-const APP_VERSION = 'v3.7';
-const APP_DATE = '2026-09-02'; // Update this on each release
+const APP_VERSION = 'v3.7.1';
+const APP_DATE = '2026-09-22'; // Update this on each release
 const APP_VER_DISPLAY = `${APP_VERSION} · ${APP_DATE}`;
 const ST = {
   pending: 'PENDING',
@@ -4479,7 +4479,7 @@ function App() {
     })(), cat.items.map(item => {
       const it = cur.items[item.id] || blankItem();
       const defects = it.defects || [];
-      const expanded = it.status !== ST.pending || defects.length > 0;
+      const expanded = defects.length > 0;
       const incomplete = defects.some(df => !isDefectComplete(df));
       const worst = GRADES.find(g => defects.some(df => df.grade === g.id));
       return /*#__PURE__*/React.createElement(Card, {
@@ -4595,7 +4595,7 @@ function App() {
           fontStyle: 'italic',
           marginTop: -6
         }
-      }, "Carried into Areas Not Inspected. Required before the report can be generated.")), it.status !== ST.na && /*#__PURE__*/React.createElement("div", {
+      }, "Carried into Areas Not Inspected. Required before the report can be generated.")), (it.status === ST.done || defects.length > 0) && /*#__PURE__*/React.createElement("div", {
         style: {
           marginTop: 10,
           background: '#FAFCFC',
@@ -5027,7 +5027,7 @@ function App() {
             cursor: 'pointer'
           }
         }, "🖼 Gallery")));
-      }), /*#__PURE__*/React.createElement("button", {
+      }), defects.length > 0 && /*#__PURE__*/React.createElement("button", {
         onClick: () => addDefect(item.id),
         style: {
           width: '100%',
@@ -5040,7 +5040,7 @@ function App() {
           fontWeight: 700,
           cursor: 'pointer'
         }
-      }, "⚑ + Add ", defects.length ? 'another ' : '', "defect to ", item.l)));
+      }, "⚑ + Add another defect to ", item.l)));
     }), (() => {
       const mo = maintenanceOnlyDefects(cur);
       if (!mo.length) return null;
