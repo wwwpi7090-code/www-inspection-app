@@ -284,7 +284,7 @@ async function checkStorageQuota() {
 }
 
 // ─── CONSTANTS ───────────────────────────────────────────────
-const APP_VERSION = 'v3.6';
+const APP_VERSION = 'v3.7';
 const APP_DATE = '2026-09-02'; // Update this on each release
 const APP_VER_DISPLAY = `${APP_VERSION} · ${APP_DATE}`;
 const ST = {
@@ -680,13 +680,20 @@ const genFileNo = () => {
   return `wpi${String(n.getDate()).padStart(2, '0')}${String(n.getMonth() + 1).padStart(2, '0')}${String(n.getFullYear()).slice(2)}-01`;
 };
 function blankItem() {
-  // A checklist item holds zero or more defects. status is the item's own state.
+  // An item records that it was inspected (status, photos, note) AND any defects
+  // found. The two are independent: an item can be inspected and clear, inspected
+  // with defects, or not inspected at all.
   return {
     status: ST.pending,
+    photos: [],
+    note: '',
+    naReason: '',
     defects: []
   };
 }
 function blankDefect() {
+  // reportInclude=false keeps the defect in the app and on the maintenance list
+  // but out of the formal report — for repair scoping outside a pre-purchase brief.
   return {
     id: gid(),
     defectRef: '',
@@ -697,7 +704,8 @@ function blankDefect() {
     grade: '',
     axes: [],
     material: '',
-    photos: []
+    photos: [],
+    reportInclude: true
   };
 }
 
@@ -717,6 +725,15 @@ function allDefects(ins) {
     });
   }));
   return out.sort((a, b) => parseInt((a.defectRef || 'D-99').replace('D-', ''), 10) - parseInt((b.defectRef || 'D-99').replace('D-', ''), 10));
+}
+
+// Defects that belong in the formal report.
+function reportDefects(ins) {
+  return allDefects(ins).filter(df => df.reportInclude !== false);
+}
+// Defects held back from the report — maintenance scoping only.
+function maintenanceOnlyDefects(ins) {
+  return allDefects(ins).filter(df => df.reportInclude === false);
 }
 function isDefectComplete(df) {
   return !!(df.location && df.description && df.implication && df.recommendation && df.grade);
@@ -984,7 +1001,7 @@ function validateReport(ins) {
     section: 'info'
   });
   CATS.forEach(cat => cat.items.forEach(item => {
-    (ins.items[item.id]?.defects || []).forEach(df => {
+    (ins.items[item.id]?.defects || []).filter(df => df.reportInclude !== false).forEach(df => {
       const ref = df.defectRef || item.l;
       const where = `${cat.label} — ${item.l} (${ref})`;
       if (!df.location) errors.push({
@@ -1013,6 +1030,16 @@ function validateReport(ins) {
         catId: cat.id
       });
     });
+  }));
+  CATS.forEach(cat => cat.items.forEach(item => {
+    const it = ins.items[item.id];
+    if (it?.status === ST.na && !it.naReason) {
+      errors.push({
+        msg: `${cat.label} — ${item.l}: reason required for Not Inspected`,
+        section: 'checklist',
+        catId: cat.id
+      });
+    }
   }));
   const hasReadings = ins.moisture.readings.length > 0;
   if (hasReadings && !ins.moisture.meterMake) errors.push({
@@ -1052,7 +1079,7 @@ function buildExecSummary(ins) {
   }
 
   // ── 3. Significant Defects (only — no maintenance items)
-  const sig = allDefects(ins).filter(df => df.grade === 'significant');
+  const sig = reportDefects(ins).filter(df => df.grade === 'significant');
   if (sig.length) {
     out.push(`${sig.length} item${sig.length > 1 ? 's have' : ' has'} been graded as a Significant Defect. ` + `${sig.length > 1 ? 'These are' : 'This is'} summarised below. ` + `Full entries, including implications and recommendations, are set out in the body of this report.`);
     sig.forEach(d => {
@@ -1063,7 +1090,7 @@ function buildExecSummary(ins) {
   }
 
   // ── 4. Further investigation items
-  const fi = allDefects(ins).filter(df => (df.axes || []).includes('further_investigation')).map(df => df.defectRef || df.item);
+  const fi = reportDefects(ins).filter(df => (df.axes || []).includes('further_investigation')).map(df => df.defectRef || df.item);
   if (fi.length) {
     out.push(`Further investigation is recommended in respect of the following items: ${fi.join(', ')}.`);
   }
@@ -1079,7 +1106,17 @@ function buildExecSummary(ins) {
   }
 
   // ── 6. Scope limitations
+  const naItems = [];
+  CATS.forEach(cat => cat.items.forEach(item => {
+    const it = ins.items?.[item.id];
+    if (it?.status === ST.na && it.naReason) {
+      naItems.push(`${cat.label.replace(/^\d+\.\s/, '')} — ${item.l}: ${it.naReason}`);
+    }
+  }));
   out.push(`This inspection was visual and non-invasive. Concealed building elements, including those within wall cavities, ` + `beneath floor coverings and above ceiling linings, were not inspected and are excluded from this report. ` + `Areas not inspected: ${ins.insp?.areasNotInspected || '—'}.`);
+  if (naItems.length) {
+    out.push(`The following items were not inspected, for the reasons recorded: ${naItems.join('; ')}.`);
+  }
 
   // ── 7. HIGH risk — invasive testing + precedent
   if (rating === 'HIGH') {
@@ -1959,7 +1996,7 @@ function App() {
   }
   function onFileInput(e) {
     const t = pendingPhotoItem.current;
-    if (t?.catId) handleCatFiles(e.target.files, t.catId);else handleFiles(e.target.files, t);
+    if (t?.catId) handleCatFiles(e.target.files, t.catId);else if (t?.itemOnly) handleItemFiles(e.target.files, t.itemId);else handleFiles(e.target.files, t);
   }
   async function deletePhoto(itemId, defectId, photoIdx) {
     const item = cur.items[itemId];
@@ -1972,6 +2009,105 @@ function App() {
     } : x);
     await updItem(itemId, {
       defects
+    });
+    setPhotoMod(null);
+    showToast('Photo deleted');
+  }
+
+  // ── Item inspection photos ───────────────────────────────────
+  // Evidence that an item was inspected, independent of any defect.
+  // Labelled from the item id, e.g. SITE-DRIVE-01.
+  function itemPhotoCode(itemId) {
+    return itemId.replace(/_/g, '-').toUpperCase();
+  }
+  async function handleItemFiles(files, itemId) {
+    if (!files?.length || !itemId) return;
+    const code = itemPhotoCode(itemId);
+    for (let i = 0; i < files.length; i++) {
+      try {
+        const blob = await compressImage(files[i]);
+        const ins = (await dbGet('inspections', cur.id)) || cur;
+        const item = ins.items[itemId] || blankItem();
+        const existing = item.photos || [];
+        const photoId = gid();
+        const seq = existing.length + 1;
+        const photoLabel = `${code}-${String(seq).padStart(2, '0')}`;
+        const filename = photoFilename(ins.fileNo, photoLabel, seq);
+        const rec = {
+          photoId,
+          inspectionId: ins.id,
+          defectRef: photoLabel,
+          itemId,
+          seq,
+          photoLabel,
+          blob,
+          caption: '',
+          savedToDevice: false,
+          saveStatus: 'pending',
+          createdAt: new Date().toISOString()
+        };
+        let saveStatus = 'ok';
+        try {
+          await dbPutVerified('photos', {
+            ...rec,
+            saveStatus: 'ok'
+          });
+        } catch {
+          saveStatus = 'fail';
+          showToast('🔴 Photo save to app failed — retry', 'error');
+        }
+        let savedToDevice = false;
+        if (ins.saveDevicePhotos) {
+          savedToDevice = saveToDevice(blob, filename);
+          if (!savedToDevice && saveStatus !== 'fail') saveStatus = 'partial';
+        }
+        await dbPut('photos', {
+          ...rec,
+          saveStatus,
+          savedToDevice
+        });
+        const ref = {
+          photoId,
+          photoLabel,
+          caption: '',
+          saveStatus,
+          savedToDevice
+        };
+        await saveInspection({
+          ...ins,
+          items: {
+            ...ins.items,
+            [itemId]: {
+              ...item,
+              photos: [...existing, ref],
+              status: item.status === ST.pending ? ST.done : item.status
+            }
+          }
+        });
+        showToast(savedToDevice ? `✅ ${photoLabel} saved + downloaded` : saveStatus === 'ok' ? `💾 ${photoLabel} saved to app` : '⚠️ Partial save — check', saveStatus === 'fail' ? 'error' : 'ok');
+      } catch (err) {
+        console.error('Item photo error:', err);
+        showToast('🔴 Photo error — please retry', 'error');
+      }
+    }
+    if (fileRef.current) fileRef.current.value = '';
+  }
+  function updItemPhoto(itemId, idx, patch) {
+    const photos = (cur.items[itemId]?.photos || []).map((p, n) => n === idx ? {
+      ...p,
+      ...patch
+    } : p);
+    return updItem(itemId, {
+      photos
+    });
+  }
+  async function deleteItemPhoto(itemId, idx) {
+    const photos = [...(cur.items[itemId]?.photos || [])];
+    const ref = photos[idx];
+    if (ref?.photoId) await dbDelete('photos', ref.photoId).catch(() => {});
+    photos.splice(idx, 1);
+    await updItem(itemId, {
+      photos
     });
     setPhotoMod(null);
     showToast('Photo deleted');
@@ -2171,23 +2307,32 @@ function App() {
   // ── Export / Import JSON ────────────────────────────────────
   function exportJSON() {
     if (!cur) return;
+    // Photo blobs stay in IndexedDB and on the device; only references travel.
+    const stripPhotos = arr => (arr || []).map(p => ({
+      photoId: p.photoId,
+      photoLabel: p.photoLabel,
+      num: p.num,
+      caption: p.caption || '',
+      _needsReattach: true,
+      saveStatus: 'missing'
+    }));
     const exportData = {
-      wwwExportVersion: "1.0",
+      wwwExportVersion: "2.0",
+      appVersion: APP_VERSION,
       exportedAt: new Date().toISOString(),
       exportedFrom: /Mobi|Android/i.test(navigator.userAgent) ? 'mobile' : 'desktop',
       inspection: {
         ...cur,
         items: Object.fromEntries(Object.entries(cur.items).map(([id, item]) => [id, {
           ...item,
-          // Keep photo refs (label, num, caption) but mark as needing re-attachment
-          photos: (item.photos || []).map(p => ({
-            photoId: p.photoId,
-            num: p.num,
-            photoLabel: p.photoLabel,
-            caption: p.caption || '',
-            _needsReattach: true,
-            saveStatus: 'missing'
+          photos: stripPhotos(item.photos),
+          defects: (item.defects || []).map(df => ({
+            ...df,
+            photos: stripPhotos(df.photos)
           }))
+        }])),
+        catPhotos: Object.fromEntries(Object.entries(cur.catPhotos || {}).map(([catId, v]) => [catId, {
+          photos: stripPhotos(v.photos)
         }]))
       }
     };
@@ -2202,7 +2347,7 @@ function App() {
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 2000);
-    showToast('✅ JSON exported — re-attach photos on other device');
+    showToast('✅ JSON exported — photo files stay in Downloads');
   }
   async function importJSON(file) {
     try {
@@ -2589,7 +2734,7 @@ function App() {
       };
 
       // ── Build flagged list ──
-      const flagged = allDefects(cur).map(d => ({
+      const flagged = reportDefects(cur).map(d => ({
         ...d,
         gc: gradeColors[d.grade] || {},
         photoLabels: (d.photos || []).map(ph => ph.photoLabel || '?').join(', ')
@@ -4360,7 +4505,17 @@ function App() {
           fontWeight: 500,
           color: C.txt
         }
-      }, item.l), defects.length > 0 && /*#__PURE__*/React.createElement("span", {
+      }, item.l), it.photos?.length > 0 && /*#__PURE__*/React.createElement("span", {
+        style: {
+          marginLeft: 6,
+          fontSize: 10,
+          fontWeight: 700,
+          padding: '1px 6px',
+          borderRadius: 4,
+          background: '#E8F5F3',
+          color: C.done
+        }
+      }, "📷 ", it.photos.length), defects.length > 0 && /*#__PURE__*/React.createElement("span", {
         style: {
           marginLeft: 6,
           fontSize: 10,
@@ -4377,7 +4532,8 @@ function App() {
         }
       }, /*#__PURE__*/React.createElement("button", {
         onClick: () => updItem(item.id, {
-          status: ST.done
+          status: ST.done,
+          naReason: ''
         }),
         style: {
           padding: '6px 10px',
@@ -4386,8 +4542,8 @@ function App() {
           fontSize: 11,
           fontWeight: 700,
           cursor: 'pointer',
-          background: it.status === ST.done && !defects.length ? C.done : C.bg,
-          color: it.status === ST.done && !defects.length ? '#fff' : C.txt2
+          background: it.status === ST.done ? C.done : C.bg,
+          color: it.status === ST.done ? '#fff' : C.txt2
         }
       }, "✓ OK"), /*#__PURE__*/React.createElement("button", {
         onClick: () => updItem(item.id, {
@@ -4415,7 +4571,152 @@ function App() {
           background: defects.length ? C.danger : C.bg,
           color: defects.length ? '#fff' : C.txt2
         }
-      }, "⚑ +"))), expanded && /*#__PURE__*/React.createElement("div", {
+      }, "⚑ +"))), it.status === ST.na && /*#__PURE__*/React.createElement("div", {
+        style: {
+          marginTop: 10,
+          background: C.bg,
+          borderRadius: 8,
+          padding: '10px 12px',
+          border: `1.5px solid ${it.naReason ? C.border : C.amber}`
+        }
+      }, /*#__PURE__*/React.createElement(DefectField, {
+        label: "Reason not inspected *",
+        value: it.naReason,
+        filled: !!it.naReason,
+        rows: 2,
+        onCommit: v => updItem(item.id, {
+          naReason: v
+        }),
+        placeholder: "e.g. No access hatch to this area; obstructed by stored goods"
+      }), /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 10,
+          color: C.txt2,
+          fontStyle: 'italic',
+          marginTop: -6
+        }
+      }, "Carried into Areas Not Inspected. Required before the report can be generated.")), it.status !== ST.na && /*#__PURE__*/React.createElement("div", {
+        style: {
+          marginTop: 10,
+          background: '#FAFCFC',
+          borderRadius: 8,
+          padding: '10px 12px',
+          border: `1px solid ${C.border}`
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 10,
+          fontWeight: 700,
+          color: C.done,
+          textTransform: 'uppercase',
+          letterSpacing: '.06em',
+          marginBottom: 8
+        }
+      }, "Inspection record"), it.photos?.length > 0 && /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 8,
+          marginBottom: 10
+        }
+      }, it.photos.map((ph, idx) => /*#__PURE__*/React.createElement("div", {
+        key: ph.photoId || idx,
+        style: {
+          position: 'relative'
+        }
+      }, /*#__PURE__*/React.createElement(PhotoThumb, {
+        photoRef: ph,
+        onClick: () => setPhotoMod({
+          itemId: item.id,
+          itemOnly: true,
+          idx
+        })
+      }), /*#__PURE__*/React.createElement("button", {
+        onClick: e => {
+          e.stopPropagation();
+          deleteItemPhoto(item.id, idx);
+        },
+        title: "Remove photo",
+        style: {
+          position: 'absolute',
+          top: -6,
+          right: -6,
+          width: 22,
+          height: 22,
+          borderRadius: '50%',
+          border: 'none',
+          background: C.danger,
+          color: '#fff',
+          fontSize: 12,
+          fontWeight: 700,
+          cursor: 'pointer',
+          lineHeight: 1,
+          boxShadow: '0 1px 4px rgba(0,0,0,.3)'
+        }
+      }, "✕"), /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 8,
+          fontFamily: 'monospace',
+          color: C.txt2,
+          textAlign: 'center',
+          marginTop: 2
+        }
+      }, ph.photoLabel)))), /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: 'flex',
+          gap: 6,
+          marginBottom: 8
+        }
+      }, /*#__PURE__*/React.createElement("button", {
+        onClick: () => {
+          pendingPhotoItem.current = {
+            itemId: item.id,
+            itemOnly: true
+          };
+          fileRef.current.setAttribute('capture', 'environment');
+          fileRef.current.click();
+        },
+        style: {
+          flex: 1,
+          padding: '8px',
+          borderRadius: 6,
+          border: `1px solid ${C.done}`,
+          background: C.white,
+          color: C.done,
+          fontSize: 12,
+          fontWeight: 600,
+          cursor: 'pointer'
+        }
+      }, "📷 Camera"), /*#__PURE__*/React.createElement("button", {
+        onClick: () => {
+          pendingPhotoItem.current = {
+            itemId: item.id,
+            itemOnly: true
+          };
+          fileRef.current.removeAttribute('capture');
+          fileRef.current.click();
+        },
+        style: {
+          flex: 1,
+          padding: '8px',
+          borderRadius: 6,
+          border: `1px solid ${C.done}`,
+          background: C.white,
+          color: C.done,
+          fontSize: 12,
+          fontWeight: 600,
+          cursor: 'pointer'
+        }
+      }, "🖼 Gallery")), /*#__PURE__*/React.createElement(DefectField, {
+        label: "Observation note (optional)",
+        value: it.note,
+        filled: true,
+        rows: 2,
+        onCommit: v => updItem(item.id, {
+          note: v
+        }),
+        placeholder: "e.g. Surface crazing observed, no structural significance. Not recorded as a defect."
+      })), expanded && /*#__PURE__*/React.createElement("div", {
         style: {
           marginTop: 12
         }
@@ -4470,7 +4771,36 @@ function App() {
             cursor: 'pointer',
             padding: '2px 4px'
           }
-        }, "✕ Delete")), bad && /*#__PURE__*/React.createElement("div", {
+        }, "✕ Delete")), /*#__PURE__*/React.createElement("label", {
+          style: {
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            cursor: 'pointer',
+            padding: '8px 10px',
+            borderRadius: 6,
+            marginBottom: 10,
+            background: df.reportInclude === false ? '#F3F0FF' : C.bg,
+            border: `1px solid ${df.reportInclude === false ? C.primary : C.border}`
+          }
+        }, /*#__PURE__*/React.createElement("input", {
+          type: "checkbox",
+          checked: df.reportInclude !== false,
+          style: {
+            width: 15,
+            height: 15,
+            accentColor: C.primary
+          },
+          onChange: e => updDefect(item.id, df.id, {
+            reportInclude: e.target.checked
+          })
+        }), /*#__PURE__*/React.createElement("span", {
+          style: {
+            fontSize: 12,
+            fontWeight: 600,
+            color: C.txt
+          }
+        }, df.reportInclude === false ? 'Maintenance list only — excluded from report' : 'Include in report')), bad && /*#__PURE__*/React.createElement("div", {
           style: {
             background: '#FFF8EC',
             border: `1px solid ${C.amber}`,
@@ -4711,7 +5041,73 @@ function App() {
           cursor: 'pointer'
         }
       }, "⚑ + Add ", defects.length ? 'another ' : '', "defect to ", item.l)));
-    }), /*#__PURE__*/React.createElement("div", {
+    }), (() => {
+      const mo = maintenanceOnlyDefects(cur);
+      if (!mo.length) return null;
+      return /*#__PURE__*/React.createElement(Card, {
+        style: {
+          border: `1px dashed ${C.primary}`
+        }
+      }, /*#__PURE__*/React.createElement(SecTitle, {
+        color: C.primary
+      }, "🔧 Maintenance List — not in report (", mo.length, ")"), /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 11,
+          color: C.txt2,
+          marginBottom: 10,
+          lineHeight: 1.5
+        }
+      }, "Recorded for repair scoping. These are excluded from the Word report and from the Executive Summary."), mo.map(d => {
+        const g = GRADES.find(x => x.id === d.grade);
+        return /*#__PURE__*/React.createElement("div", {
+          key: d.id,
+          style: {
+            padding: '8px 0',
+            borderBottom: `1px solid ${C.border}`
+          }
+        }, /*#__PURE__*/React.createElement("div", {
+          style: {
+            fontWeight: 700,
+            fontSize: 12,
+            color: C.txt,
+            marginBottom: 2
+          }
+        }, /*#__PURE__*/React.createElement("span", {
+          style: {
+            fontFamily: 'monospace',
+            marginRight: 6,
+            color: g?.color || C.txt2
+          }
+        }, d.defectRef), d.catShort, " › ", d.item, g && /*#__PURE__*/React.createElement("span", {
+          style: {
+            marginLeft: 6,
+            fontSize: 10,
+            background: g.bg,
+            color: g.color,
+            padding: '1px 6px',
+            borderRadius: 8
+          }
+        }, g.label)), d.location && /*#__PURE__*/React.createElement("div", {
+          style: {
+            fontSize: 11,
+            color: C.txt2
+          }
+        }, "📍 ", d.location), d.description && /*#__PURE__*/React.createElement("div", {
+          style: {
+            fontSize: 12,
+            color: C.txt,
+            marginTop: 2
+          }
+        }, d.description), d.recommendation && /*#__PURE__*/React.createElement("div", {
+          style: {
+            fontSize: 11,
+            color: C.primary,
+            fontWeight: 600,
+            marginTop: 2
+          }
+        }, "→ ", d.recommendation));
+      }));
+    })(), /*#__PURE__*/React.createElement("div", {
       style: {
         height: 10
       }
@@ -4831,7 +5227,7 @@ function App() {
         color: cur.wt.rating === 'HIGH' ? '#C62828' : cur.wt.rating === 'MEDIUM' ? '#EF6C00' : C.done
       }
     }, cur.wt.rating, " RISK PROFILE")))), GRADES.map(g => {
-      const items = defectList.filter(df => df.grade === g.id);
+      const items = defectList.filter(df => df.grade === g.id && df.reportInclude !== false);
       if (!items.length) return null;
       return /*#__PURE__*/React.createElement(Card, {
         key: g.id,
@@ -5224,8 +5620,9 @@ function App() {
   // Photo modal
   if (photoMod && cur) {
     const isCat = !!photoMod.catId;
-    const df = isCat ? null : (cur.items[photoMod.itemId]?.defects || []).find(x => x.id === photoMod.defectId);
-    const photoRef = isCat ? cur.catPhotos?.[photoMod.catId]?.photos?.[photoMod.idx] : df?.photos?.[photoMod.idx];
+    const isItem = !!photoMod.itemOnly;
+    const df = isCat || isItem ? null : (cur.items[photoMod.itemId]?.defects || []).find(x => x.id === photoMod.defectId);
+    const photoRef = isCat ? cur.catPhotos?.[photoMod.catId]?.photos?.[photoMod.idx] : isItem ? cur.items[photoMod.itemId]?.photos?.[photoMod.idx] : df?.photos?.[photoMod.idx];
     return /*#__PURE__*/React.createElement("div", {
       style: {
         position: 'fixed',
@@ -5277,6 +5674,12 @@ function App() {
           });
           return;
         }
+        if (isItem) {
+          updItemPhoto(photoMod.itemId, photoMod.idx, {
+            caption: e.target.value
+          });
+          return;
+        }
         const photos = df.photos.map((p, n) => n === photoMod.idx ? {
           ...p,
           caption: e.target.value
@@ -5286,7 +5689,7 @@ function App() {
         });
       }
     }), /*#__PURE__*/React.createElement("button", {
-      onClick: () => isCat ? deleteCatPhoto(photoMod.catId, photoMod.idx) : deletePhoto(photoMod.itemId, photoMod.defectId, photoMod.idx),
+      onClick: () => isCat ? deleteCatPhoto(photoMod.catId, photoMod.idx) : isItem ? deleteItemPhoto(photoMod.itemId, photoMod.idx) : deletePhoto(photoMod.itemId, photoMod.defectId, photoMod.idx),
       style: {
         marginTop: 12,
         background: C.danger,
