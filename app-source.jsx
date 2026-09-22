@@ -199,7 +199,7 @@ async function checkStorageQuota() {
 }
 
 // ─── CONSTANTS ───────────────────────────────────────────────
-const APP_VERSION = 'v3.8';
+const APP_VERSION = 'v3.8.1';
 const APP_DATE = '2026-09-22'; // Update this on each release
 const APP_VER_DISPLAY = `${APP_VERSION} · ${APP_DATE}`;
 
@@ -1588,6 +1588,18 @@ function App() {
   }
   function setSpaceNone(catId, val) {
     return saveInspection({ ...cur, spaceNone: { ...(cur.spaceNone || {}), [catId]: val } });
+  }
+
+  // Write a nested value into generalInfo, e.g. updGI(['bc','age'], '…')
+  function updGI(path, value) {
+    const gi = JSON.parse(JSON.stringify(cur.generalInfo || blankGeneralInfo()));
+    let obj = gi;
+    for (let i = 0; i < path.length - 1; i++) {
+      if (obj[path[i]] == null) obj[path[i]] = {};
+      obj = obj[path[i]];
+    }
+    obj[path[path.length - 1]] = value;
+    return saveInspection({ ...cur, generalInfo: gi });
   }
 
   function updF(sec, k, v) { return saveInspection({ ...cur, [sec]: { ...cur[sec], [k]: v } }); }
